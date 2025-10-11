@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ cfg.COMPANY_NAME }} — {{ cfg.COMPANY_DOMAIN }}</title>
+  <meta name="description" content="Design • Build • Renovate — Quality renovations across the GTA." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+  <!-- Favicon (optional) -->
+  <link rel="icon" href="{{ url_for('static', filename=cfg.FAVICON_PATH) }}" sizes="32x32">
+</head>
+<body>
+  <header class="nav">
+    <div class="container">
+      <a href="/" class="brand" aria-label="{{ cfg.COMPANY_NAME }} home">
+        <img class="logo" src="{{ url_for('static', filename=cfg.LOGO_PATH) }}" alt="{{ cfg.COMPANY_NAME }} logo" />
+        <span class="name">Kingsman Renovations</span>
+      </a>
+      <nav class="menu">
+        <a href="#services">Services</a>
+        <a href="#about">About</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span id="year1"></span> {{ cfg.COMPANY_NAME }} · All rights reserved.</p>
+    </div>
+  </footer>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

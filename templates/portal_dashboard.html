@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>My Jobs</h2>
+{% if jobs %}
+  <ul>
+    {% for j in jobs %}
+      <li><a href="{{ url_for('portal.job_detail', job_uid=j.job_uid) }}">{{ j.job_uid }} — {{ j.title }} ({{ j.status }}) — {{ j.percent_complete }}%</a></li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No jobs yet.</p>
+{% endif %}
+{% endblock %}

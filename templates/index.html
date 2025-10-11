@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block content %}
+<!-- HERO: single full‑bleed image with overlaid text -->
+<section class="hero hero-banner" style="--hero-img: url('{{ url_for('static', filename='img/hero-1.jpg') }}')">
+  <div class="hero-overlay" aria-hidden="true"></div>
+  <div class="container hero-center">
+    <h1 class="hero-title">Design • Build • Renovate</h1>
+    <p class="hero-sub">Quality renovations across the GTA.</p>
+    <div class="hero-actions">
+      <a href="#services" class="btn btn-light">OUR SERVICES</a>
+      <a href="/login" class="btn btn-dark" aria-disabled="true" title="Login coming soon">LOG IN</a>
+    </div>
+  </div>
+</section>
+
+<section id="services" class="section">
+  <div class="container">
+    <h2>Our Services</h2>
+    <div class="cards">
+      <article class="card">
+        <img src="{{ url_for('static', filename='img/card-adu.jpg') }}" alt="Additions & ADUs" />
+        <h3>Additions & ADUs</h3>
+        <p>From concept to permit to build — we expand spaces that feel like home.</p>
+      </article>
+      <article class="card">
+        <img src="{{ url_for('static', filename='img/card-permits.jpg') }}" alt="Permits" />
+        <h3>Permits & Drawings</h3>
+        <p>Ontario‑compliant drawings and permit support to keep projects moving.</p>
+      </article>
+      <article class="card">
+        <img src="{{ url_for('static', filename='img/card-entrance.jpg') }}" alt="Interiors" />
+        <h3>Kitchens • Baths • Basements</h3>
+        <p>Transformative interior work with durable materials and clean finishes.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="about" class="section alt">
+  <div class="container grid2">
+    <div>
+      <h2>About Us</h2>
+      <p>We are <strong>{{ cfg.COMPANY_NAME }}</strong>, proudly serving Ontario homeowners with transparent quotes, reliable timelines, and meticulous workmanship.</p>
+      <ul class="ticks">
+        <li>Licensed & insured</li>
+        <li>Permit-ready drawings</li>
+        <li>Dedicated project manager</li>
+      </ul>
+    </div>
+    <div>
+      <img src="{{ url_for('static', filename='img/hero-2.jpg') }}" alt="Before & After" class="rounded" />
+    </div>
+  </div>
+</section>
+
+<section id="contact" class="section">
+  <div class="container">
+    <h2>Request a Quote</h2>
+    <form id="contactForm" class="form">
+      <div class="grid2">
+        <input type="text" name="name" placeholder="Your name *" required />
+        <input type="email" name="email" placeholder="Email *" required />
+      </div>
+      <div class="grid2">
+        <input type="tel" name="phone" placeholder="Phone" />
+        <input type="text" name="subject" placeholder="Project type (e.g., Kitchen)" />
+      </div>
+      <textarea name="message" rows="5" placeholder="Tell us about your project *" required></textarea>
+      <button type="submit" class="cta">Send</button>
+      <p id="formMsg" class="form-msg" role="status"></p>
+    </form>
+  </div>
+</section>
+{% endblock %}
