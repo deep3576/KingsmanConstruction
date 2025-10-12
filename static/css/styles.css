@@ -48,3 +48,8 @@ img.rounded:hover{transform:translateY(-2px);box-shadow:0 14px 36px rgba(2,6,23,
 .auth-card .form input{font-size:16px}
 .auth-card .form .error{color:#b91c1c;margin-top:6px}
 .auth-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:var(--muted);font-size:14px}
+.portal-wrap{display:grid;place-items:center;padding:60px 16px}
+.portal-card{width:min(800px,100%);background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 12px 28px rgba(2,6,23,.12)}
+.portal-card h1{margin:0 0 12px;font-size:clamp(22px,3.4vw,32px)}
+.portal-card .lead{margin:0 0 18px;color:var(--muted)}
+.portal-actions{display:flex;gap:12px;flex-wrap:wrap}

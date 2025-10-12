@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="portal-wrap">
+  <div class="portal-card">
+    <h1>Welcome{% if current_user.is_authenticated %}, {{ current_user.email }}{% endif %}</h1>
+    <p class="lead">You’re signed in. This is your private portal. We’ll add controls here next.</p>
+
+    <div class="portal-actions">
+      <a href="/" class="btn btn-light">Go to Home</a>
+      <a href="/logout" class="btn btn-dark">Log out</a>
+    </div>
+
+    <hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0" />
+    <p style="color:#64748b">Coming soon: view contact submissions, manage content, and more.</p>
+  </div>
+</section>
+{% endblock %}

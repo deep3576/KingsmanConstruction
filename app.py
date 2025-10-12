@@ -34,7 +34,7 @@ def create_app(config_override: dict | None = None):
     @app.get("/login")
     def login():
         if getattr(current_user, "is_authenticated", False):
-            return redirect(url_for("index"))
+            return redirect(url_for("portal"))
         return render_template("login.html", cfg=Config, error=None)
 
     @app.post("/login")
@@ -46,14 +46,19 @@ def create_app(config_override: dict | None = None):
             # Re-render with error message
             return render_template("login.html", cfg=Config, error="Invalid email or password."), 401
         login_user(user)
-        next_url = request.args.get("next") or url_for("index")
+        next_url = request.args.get("next") or url_for("portal")
         return redirect(next_url)
 
     @app.get("/logout")
+    @login_required
     def logout():
-        if getattr(current_user, "is_authenticated", False):
-            logout_user()
+        logout_user()
         return redirect(url_for("index"))
+
+    @app.get("/portal")
+    @login_required
+    def portal():
+        return render_template("portal.html", cfg=Config)
 
     # ---------- Contact API ----------
     @app.post("/contact")
@@ -79,10 +84,10 @@ def create_app(config_override: dict | None = None):
         # Render your custom 404 template
         return render_template("404.html", cfg=Config), 404
 
-    @app.errorhandler(403)
-    def status_403():
+    @app.route("/status/203")
+    def status_203():
         # Serve a custom informational page with HTTP 203 status
-        return render_template("403.html", cfg=Config), 403
+        return render_template("203.html", cfg=Config), 203
 
     return app
 
