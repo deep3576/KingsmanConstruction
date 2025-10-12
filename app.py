@@ -79,7 +79,7 @@ def create_app(config_override: dict | None = None):
         # Render your custom 404 template
         return render_template("404.html", cfg=Config), 404
 
-    @app.errorhandler1(403)
+    @app.errorhandler(403)
     def status_403():
         # Serve a custom informational page with HTTP 203 status
         return render_template("403.html", cfg=Config), 403
