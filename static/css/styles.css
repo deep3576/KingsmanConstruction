@@ -9,7 +9,6 @@
 
 /* HERO: single image background with overlayed text */
 .hero-banner{position:relative;min-height:clamp(360px,62vh,720px);display:flex;align-items:center;justify-content:center;color:#fff;background-image:var(--hero-img);background-size:cover;background-position:center;background-repeat:no-repeat}
-/* optional parallax feel on larger screens */
 @media (min-width: 900px){ .hero-banner{background-attachment:fixed} }
 .hero-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.55))}
 .hero-center{position:relative;text-align:center}
@@ -40,3 +39,12 @@
 img.rounded{display:block;width:100%;height:auto;border-radius:14px;border:1px solid #e2e8f0;box-shadow:0 10px 24px rgba(2,6,23,.12);transition:transform .25s ease, box-shadow .25s ease}
 img.rounded:hover{transform:translateY(-2px);box-shadow:0 14px 36px rgba(2,6,23,.18)}
 @media (max-width:900px){ .cards{grid-template-columns:1fr} }
+
+/* Auth */
+.auth-wrap{display:grid;place-items:center;padding:60px 16px}
+.auth-card{width:min(520px,100%);background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 12px 28px rgba(2,6,23,.12)}
+.auth-card h1{margin:0 0 12px;font-size:clamp(22px,3.4vw,30px)}
+.auth-card p.lead{margin:0 0 18px;color:var(--muted)}
+.auth-card .form input{font-size:16px}
+.auth-card .form .error{color:#b91c1c;margin-top:6px}
+.auth-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:var(--muted);font-size:14px}
