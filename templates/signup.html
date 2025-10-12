@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="auth-wrap">
+  <div class="auth-card">
+    <h1>Create your account</h1>
+    <p class="lead">Sign up to request quotes faster and track your messages.</p>
+    {% if error %}
+      <div class="form-msg" style="color:#b91c1c">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="{{ url_for('signup') }}" class="form" novalidate>
+      <div class="grid2">
+        <input type="text" name="first_name" placeholder="First name *" required />
+        <input type="text" name="last_name" placeholder="Last name *" required />
+      </div>
+      <div class="grid2">
+        <input type="email" name="email" placeholder="Email *" required />
+        <input type="tel" name="phone" placeholder="Phone" />
+      </div>
+      <div class="grid2">
+        <input type="password" name="password" placeholder="Password (min 8) *" required />
+        <input type="password" name="confirm_password" placeholder="Confirm password *" required />
+      </div>
+      <input type="text" name="address1" placeholder="Address line 1" />
+      <input type="text" name="address2" placeholder="Address line 2" />
+      <div class="grid2">
+        <input type="text" name="city" placeholder="City" />
+        <input type="text" name="province" placeholder="Province/State" />
+      </div>
+      <div class="grid2">
+        <input type="text" name="postal_code" placeholder="Postal/ZIP" />
+        <div></div>
+      </div>
+      <button type="submit" class="cta" style="width:100%">Create account</button>
+      <div class="auth-meta">
+        <span>Already have an account?</span>
+        <a href="{{ url_for('login') }}" style="text-decoration:none">Log in</a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

@@ -1,7 +1,8 @@
+# Create tables using raw SQL (no ORM)
 from app import create_app
-from models import db
+from db import ensure_schema
 
 app = create_app()
 with app.app_context():
-    db.create_all()
-    print("✅ Tables created (if not exist).")
+    ensure_schema()
+    print("✅ Schema ensured with raw SQL (IF NOT EXISTS).")

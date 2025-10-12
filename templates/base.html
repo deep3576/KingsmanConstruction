@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
-  <!-- Favicon (optional) -->
   <link rel="icon" href="{{ url_for('static', filename=cfg.FAVICON_PATH) }}" sizes="32x32">
 </head>
 <body>
@@ -24,10 +23,12 @@
         <a href="#about">About</a>
         <a href="#contact">Contact</a>
         {% if current_user.is_authenticated %}
+          {% if current_user.is_admin %}<a href="/admin">Admin</a>{% endif %}
           <a href="/portal">Portal</a>
           <a href="/logout">Log out</a>
         {% else %}
           <a href="/login" class="login-link">Log in</a>
+          <a href="/signup" class="login-link">Sign up</a>
         {% endif %}
       </nav>
     </div>
