@@ -1,5 +1,24 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block content %}
-<h2>Login</h2>
-<h3> Page is under development.</h3>
+<section class="auth-wrap">
+  <div class="auth-card">
+    <h1>Log in</h1>
+    <p class="lead">Welcome back. Enter your email and password.</p>
+
+    {% if error %}
+      <div class="form-msg" style="color:#b91c1c">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('login') }}" class="form" novalidate>
+      <input type="email" name="email" placeholder="Email" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <button type="submit" class="cta" style="width:100%">Log in</button>
+
+      <div class="auth-meta">
+        <span>Forgot your password?</span>
+        <a href="/" style="text-decoration:none">Back to home</a>
+      </div>
+    </form>
+  </div>
+</section>
 {% endblock %}
