@@ -1,3 +1,4 @@
+# db.py — raw SQL only (no ORM)
 from sqlalchemy import create_engine, text
 from config import Config
 
@@ -8,10 +9,11 @@ engine = create_engine(
     future=True,
 )
 
-
 def ensure_schema():
-    """Create/upgrade tables using plain MySQL DDL. All IDs are SIGNED INT.
-    Also ensures a `role` column on `users` (admin/consumer)."""
+    """Create/upgrade tables using plain MySQL DDL.
+    Ensures users, consumer_profiles, contact_messages, employees, employee_status_log.
+    All IDs are INT (signed). No ORM used.
+    """
     sql_users = """
     CREATE TABLE IF NOT EXISTS users (
         id INT NOT NULL AUTO_INCREMENT,
@@ -37,8 +39,7 @@ def ensure_schema():
         postal_code VARCHAR(20),
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
-        CONSTRAINT fk_consumer_user
-          FOREIGN KEY (user_id) REFERENCES users(id)
+        CONSTRAINT fk_consumer_user FOREIGN KEY (user_id) REFERENCES users(id)
           ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
@@ -58,20 +59,47 @@ def ensure_schema():
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
 
+    sql_employees = """
+    CREATE TABLE IF NOT EXISTS employees (
+        id INT NOT NULL AUTO_INCREMENT,
+        full_name VARCHAR(200) NOT NULL,
+        job_title VARCHAR(120),
+        email VARCHAR(200),
+        phone VARCHAR(40),
+        daily_rate DECIMAL(10,2) NOT NULL,
+        start_date DATE NULL,
+        status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        INDEX idx_emp_status (status),
+        INDEX idx_emp_name (full_name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+
+    sql_employee_status_log = """
+    CREATE TABLE IF NOT EXISTS employee_status_log (
+        id INT NOT NULL AUTO_INCREMENT,
+        employee_id INT NOT NULL,
+        work_date DATE NOT NULL,
+        status ENUM('present','absent','half-day','leave') NOT NULL DEFAULT 'present',
+        sign_in DATETIME NULL,
+        sign_out DATETIME NULL,
+        notes VARCHAR(255),
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uniq_emp_date (employee_id, work_date),
+        INDEX idx_esl_emp (employee_id),
+        INDEX idx_esl_date (work_date),
+        CONSTRAINT fk_esl_employee FOREIGN KEY (employee_id) REFERENCES employees(id)
+          ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+
     with engine.begin() as conn:
-        # Base tables
         conn.execute(text(sql_users))
-        # Ensure role column exists for older deployments
-        role_exists = conn.execute(text("""
-            SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'users'
-              AND COLUMN_NAME = 'role'
-            LIMIT 1
-        """)).first()
-        if not role_exists:
-            conn.execute(text(
-                "ALTER TABLE users ADD COLUMN role ENUM('admin','consumer') NOT NULL DEFAULT 'consumer' AFTER password_hash"
-            ))
         conn.execute(text(sql_consumer_profiles))
         conn.execute(text(sql_contact_messages))
+        conn.execute(text(sql_employees))
+        conn.execute(text(sql_employee_status_log))

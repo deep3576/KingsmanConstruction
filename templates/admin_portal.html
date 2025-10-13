@@ -3,53 +3,163 @@
 <section class="portal-wrap">
   <div class="portal-card">
     <h1>Admin Portal</h1>
-    <p class="lead">
-      Welcome{% if current_user.is_authenticated %}, {{ current_user.email }}{% endif %}.
-      Use these tools to manage the site.
-    </p>
+    <p class="lead">Welcome{% if current_user.is_authenticated %}, {{ current_user.email }}{% endif %}.</p>
 
-    <div class="portal-actions" style="margin-bottom:16px">
-      <a href="/" class="btn btn-light">View Site</a>
-      <a href="/logout" class="btn btn-dark">Log out</a>
-    </div>
+    <nav class="tabs" aria-label="Admin sections">
+      <a href="{{ url_for('admin_portal', tab='dashboard') }}" class="{% if (tab or 'dashboard') == 'dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="{{ url_for('admin_portal', tab='employees') }}" class="{% if tab == 'employees' %}active{% endif %}">Employees</a>
+      <a href="{{ url_for('admin_portal', tab='jobs') }}" class="{% if tab == 'jobs' %}active{% endif %}">Jobs</a>
+    </nav>
 
-    <div class="cards" style="grid-template-columns:repeat(3,1fr); gap:14px">
-      <article class="card" style="padding:16px">
-        <h3 style="margin:0 0 8px">New Messages</h3>
-        <p class="form-msg">(coming soon)</p>
-      </article>
-      <article class="card" style="padding:16px">
-        <h3 style="margin:0 0 8px">Active Users</h3>
-        <p class="form-msg">(coming soon)</p>
-      </article>
-      <article class="card" style="padding:16px">
-        <h3 style="margin:0 0 8px">Open Projects</h3>
-        <p class="form-msg">(coming soon)</p>
-      </article>
-    </div>
+    {% if (tab or 'dashboard') == 'dashboard' %}
+      <div class="cards" style="grid-template-columns:repeat(3,1fr); gap:14px">
+        <article class="card" style="padding:16px"><h3 style="margin:0 0 8px">New Messages</h3><p class="form-msg">(coming soon)</p></article>
+        <article class="card" style="padding:16px"><h3 style="margin:0 0 8px">Active Users</h3><p class="form-msg">(coming soon)</p></article>
+        <article class="card" style="padding:16px"><h3 style="margin:0 0 8px">Open Jobs</h3><p class="form-msg">(coming soon)</p></article>
+      </div>
 
-    <hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0" />
+    {% elif tab == 'employees' %}
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <button id="btnAddEmp" class="btn btn-dark btn-sm">+ Add Employee</button>
+      </div>
 
-    <h2 style="margin:0 0 12px;font-size:20px">Recent contact submissions</h2>
-    <div class="card" style="overflow:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:14px">
-        <thead>
-          <tr style="background:#f8fafc">
-            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0">When</th>
-            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0">Name</th>
-            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0">Email</th>
-            <th style="text-align:left;padding:10px;border-bottom:1px solid #e2e8f0">Subject</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding:10px;border-bottom:1px solid #e2e8f0" colspan="4">
-              Coming soon — this will list the latest entries from <code>contact_messages</code>.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <!-- Hidden create form (toggle) -->
+      <div id="empFormCard" class="card hidden" style="padding:16px">
+        <h3 style="margin:0 0 10px">Add employee</h3>
+        <form id="empForm" class="form">
+          <div class="grid2">
+            <input type="text" name="full_name" placeholder="Full name *" required />
+            <input type="text" name="job_title" placeholder="Job title" />
+          </div>
+          <div class="grid2">
+            <input type="email" name="email" placeholder="Email" />
+            <input type="tel" name="phone" placeholder="Phone" />
+          </div>
+          <div class="grid2">
+            <input type="number" name="daily_rate" placeholder="Daily rate (CAD) *" step="0.01" min="0" required />
+            <input type="date" name="start_date" />
+          </div>
+          <div class="grid2">
+            <select name="status">
+              <option value="active" selected>Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <div></div>
+          </div>
+
+          <div id="empFormMsg" class="inline-msg"></div>
+          <div style="display:flex; gap:8px; margin-top:8px">
+            <button type="submit" class="btn btn-dark">Save</button>
+            <button type="button" id="empFormCancel" class="btn btn-light">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Employees table with inline status change -->
+      <div class="card" style="overflow:auto;margin-top:16px">
+        <table id="employeesTable" class="table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Title</th><th>Email</th><th>Phone</th>
+              <th>Daily Rate</th><th>Status</th><th>Start</th><th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if employees %}
+              {% for e in employees %}
+                <tr>
+                  <td>{{ e.full_name }}</td>
+                  <td>{{ e.job_title or '-' }}</td>
+                  <td>{{ e.email or '-' }}</td>
+                  <td>{{ e.phone or '-' }}</td>
+                  <td>${{ '%.2f'|format(e.daily_rate) }}</td>
+                  <td>
+                    <select class="emp-status" data-id="{{ e.id }}">
+                      <option value="active"  {% if e.status == 'active' %}selected{% endif %}>Active</option>
+                      <option value="inactive"{% if e.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                    <small class="row-msg" id="empRowMsg-{{ e.id }}"></small>
+                  </td>
+                  <td>{{ e.start_date or '-' }}</td>
+                  <td>{{ e.updated_at }}</td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="8">No employees yet. Use “Add Employee”.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Attendance / Timesheet -->
+      <div class="card" style="padding:16px; margin-top:16px">
+        <div class="att-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+          <button id="btnToggleAttendance" class="btn btn-dark btn-sm">Manage Timesheet</button>
+          <div id="attMsg" class="inline-msg"></div>
+        </div>
+
+        <div id="attendancePanel" class="attendance-wrap hidden" style="margin-top:12px">
+          <div class="att-controls">
+            <label>Employee
+              <select id="attEmployee">
+                <option value="">Select an employee…</option>
+                {% for e in employees or [] %}
+                  <option value="{{ e.id }}">{{ e.full_name }}</option>
+                {% endfor %}
+              </select>
+            </label>
+
+            <div class="att-monthnav">
+              <button type="button" class="btn btn-light btn-sm" data-att="prev">◀</button>
+              <strong id="attMonthLabel">Month YYYY</strong>
+              <button type="button" class="btn btn-light btn-sm" data-att="next">▶</button>
+            </div>
+          </div>
+
+          <div class="calendar">
+            <div class="cal-header">
+              <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            <div id="calGrid" class="cal-grid"></div>
+          </div>
+
+          <div class="att-editor">
+            <h3>Selected day</h3>
+            <div id="attSelectedDate" class="muted">—</div>
+            <label>Status
+              <select id="attStatus">
+                <option value="present">Present</option>
+                <option value="absent">Absent</option>
+                <option value="half-day">Half-day</option>
+                <option value="leave">Leave</option>
+              </select>
+            </label>
+            <label>Sign-in <input id="attIn" type="time" /></label>
+            <label>Sign-out <input id="attOut" type="time" /></label>
+            <label>Notes <input id="attNotes" type="text" placeholder="Optional" /></label>
+            <button id="attSave" class="btn btn-dark btn-sm" type="button">Save</button>
+          </div>
+
+          <div class="att-legend">
+            <span class="pill present">Present</span>
+            <span class="pill absent">Absent</span>
+            <span class="pill half">Half-day</span>
+            <span class="pill leave">Leave</span>
+          </div>
+        </div>
+      </div>
+
+    {% elif tab == 'jobs' %}
+      <div class="portal-actions" style="margin-bottom:12px">
+        <a href="#" class="btn btn-dark btn-sm" aria-disabled="true">+ New Job</a>
+      </div>
+      <div class="card" style="overflow:auto">
+        <table class="table"><thead><tr>
+          <th>Job ID</th><th>Title</th><th>Client</th><th>Status</th><th>Updated</th>
+        </tr></thead><tbody><tr><td colspan="5">Jobs UI placeholder.</td></tr></tbody></table>
+      </div>
+    {% endif %}
   </div>
 </section>
 {% endblock %}
