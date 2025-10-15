@@ -20,12 +20,29 @@
 
     {% elif tab == 'employees' %}
       <!-- Toolbar -->
-      <div class="toolbar">
-        <button id="btnAddEmp" class="btn btn-dark btn-sm">+ Add Employee</button>
-      </div>
+    <nav class="tabs" aria-label="Employees">
+    <a href="{{ url_for('admin_portal', tab='employees', subtab='dashboard') }}"
+     class="{{ 'active' if (subtab or 'dashboard') == 'dashboard' else '' }}">Overview</a>
 
-      <!-- Hidden create form (toggle) -->
-      <div id="empFormCard" class="card hidden" style="padding:16px">
+    <a href="{{ url_for('admin_portal', tab='employees', subtab='timesheet') }}"
+     class="{{ 'active' if subtab == 'timesheet' else '' }}">TimeSheet</a>
+
+    <a href="{{ url_for('admin_portal', tab='employees', subtab='manage') }}"
+     class="{{ 'active' if subtab == 'manage' else '' }}">Manage</a>
+
+    <a href="{{ url_for('admin_portal', tab='employees', subtab='payments') }}"
+     class="{{ 'active' if subtab == 'payments' else '' }}">Payments</a>
+  </nav>
+
+    {% if (subtab or 'dashboard') == 'dashboard' %}
+    <h1> Placeholder </h1>
+    {% elif (subtab or 'manage') == 'manage' %}
+    <h1> Employee Management</h1>
+    <button id="btnAddEmp" class="btn btn-dark btn-sm collapsible-button">
+      <span class="icon">+</span> Add Employee
+    </button>
+    <div class="collapsible-content">
+            <div id="empFormCard" class="card hidden" style="padding:16px">
         <h3 style="margin:0 0 10px">Add employee</h3>
         <form id="empForm" class="form">
           <div class="grid2">
@@ -55,45 +72,11 @@
           </div>
         </form>
       </div>
+  </div>
 
-      <!-- Employees table with inline status change -->
-      <div class="card" style="overflow:auto;margin-top:16px">
-        <table id="employeesTable" class="table">
-          <thead>
-            <tr>
-              <th>Name</th><th>Title</th><th>Email</th><th>Phone</th>
-              <th>Daily Rate</th><th>Status</th><th>Start</th><th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% if employees %}
-              {% for e in employees %}
-                <tr>
-                  <td>{{ e.full_name }}</td>
-                  <td>{{ e.job_title or '-' }}</td>
-                  <td>{{ e.email or '-' }}</td>
-                  <td>{{ e.phone or '-' }}</td>
-                  <td>${{ '%.2f'|format(e.daily_rate) }}</td>
-                  <td>
-                    <select class="emp-status" data-id="{{ e.id }}">
-                      <option value="active"  {% if e.status == 'active' %}selected{% endif %}>Active</option>
-                      <option value="inactive"{% if e.status == 'inactive' %}selected{% endif %}>Inactive</option>
-                    </select>
-                    <small class="row-msg" id="empRowMsg-{{ e.id }}"></small>
-                  </td>
-                  <td>{{ e.start_date or '-' }}</td>
-                  <td>{{ e.updated_at }}</td>
-                </tr>
-              {% endfor %}
-            {% else %}
-              <tr><td colspan="8">No employees yet. Use “Add Employee”.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
+    {% elif (subtab or 'timesheet') == 'timesheet' %}
 
-      <!-- Attendance / Timesheet -->
-      <div class="card" style="padding:16px; margin-top:16px">
+    <div class="card" style="padding:16px; margin-top:16px">
         <div class="att-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px">
           <button id="btnToggleAttendance" class="btn btn-dark btn-sm">Manage Timesheet</button>
           <div id="attMsg" class="inline-msg"></div>
@@ -149,6 +132,11 @@
           </div>
         </div>
       </div>
+
+    {% elif (subtab or 'payments') == 'payments' %}
+    <h1> Placeholder payments</h1>
+    {% endif %}
+      <!-- Attendance / Timesheet -->
 
     {% elif tab == 'jobs' %}
       <div class="portal-actions" style="margin-bottom:12px">

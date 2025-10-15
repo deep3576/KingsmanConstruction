@@ -140,3 +140,42 @@ img.rounded:hover{transform:translateY(-2px);box-shadow:0 14px 36px rgba(2,6,23,
 .row-msg.error{color:#b91c1c}
 
 /* (rest of your existing CSS stays as-is, including the improved attendance styles) */
+.collapsible-button {
+  background-color: #f1f1f1;
+  border: none;
+  padding: 10px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.collapsible-button .icon {
+  margin-right: 8px;
+  font-weight: bold;
+}
+
+.collapsible-content {
+  padding: 0 18px;
+  display: none; /* Hidden by default */
+  overflow: hidden;
+  background-color: #eee;
+}
+
+
+
+
+/* Subtabs under Employees */
+.subtabs{
+  display:flex; gap:.5rem; margin:.5rem 0 1rem; padding:.25rem;
+  border-bottom:1px solid #e5e7eb; overflow-x:auto; -ms-overflow-style:none; scrollbar-width:none;
+}
+.subtabs::-webkit-scrollbar{ display:none; }
+.subtabs a{
+  text-decoration:none; padding:.5rem .75rem; border-radius:.5rem;
+  color:#111827; font-weight:600; white-space:nowrap;
+}
+.subtabs a.active{ background:#111827; color:#fff; }

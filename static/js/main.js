@@ -1,4 +1,30 @@
 // App scripts: contact form + admin employees + attendance UI
+document.querySelectorAll('.collapsible-button').forEach(button => {
+  button.addEventListener('click', function() {
+    this.classList.toggle('active');
+    const content = this.nextElementSibling;
+    const icon = this.querySelector('.icon');
+
+    if (content.style.display === "block") {
+      content.style.display = "none";
+      icon.textContent = "+";
+    } else {
+      content.style.display = "block";
+      icon.textContent = "-";
+    }
+  });
+});
+// Get elements
+
+
+
+
+
+
+
+
+
+
 
 document.addEventListener('DOMContentLoaded', () => {
   const y = new Date().getFullYear();

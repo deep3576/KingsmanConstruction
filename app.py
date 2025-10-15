@@ -15,8 +15,6 @@ def _require_admin():
     if not current_user.is_authenticated or getattr(current_user, "role", None) != "admin":
         abort(403)
 
-# Create employee (JSON)
-
 
 # --- Minimal user session object for Flask-Login (no ORM) ---
 @dataclass
@@ -172,18 +170,30 @@ def create_app(config_override: dict | None = None):
         login_user(UserSession(id=user_id, email=email, role='consumer'))
         return redirect(url_for("portal"))
 
-    # ---------- Admin Portal & Tabs ----------
+    # ---------- Admin Portal & Tabs (with Employees subtabs) ----------
     @app.get("/admin-portal")
     @login_required
     def admin_portal():
         if not getattr(current_user, "is_admin", False):
             return abort(403)
+
         tab = (request.args.get("tab") or "dashboard").lower()
         if tab not in ("dashboard", "employees", "jobs"):
             tab = "dashboard"
 
-        employees = None
+        # NEW: handle employees subtabs
+        subtab = None
         if tab == "employees":
+            subtab = (request.args.get("subtab") or "manage").lower()
+            allowed_subtabs = {"manage", "timesheet", "dashboard", "payments"}
+            if subtab not in allowed_subtabs:
+                subtab = "manage"
+
+        employees = None
+        employees_metrics = None
+
+        if tab == "employees":
+            # Load employees for manage & timesheet views (handy for selectors)
             with engine.connect() as conn:
                 employees = conn.execute(text(
                     """
@@ -192,14 +202,47 @@ def create_app(config_override: dict | None = None):
                     ORDER BY created_at DESC
                     """
                 )).mappings().all()
-        return render_template("admin_portal.html", cfg=Config, tab=tab, employees=employees, form_error=None, form_data=None)
+
+                # Simple metrics for the Employees->Dashboard subtab
+                if subtab == "dashboard":
+                    employees_metrics = conn.execute(text(
+                        """
+                        SELECT
+                          COUNT(*)                                   AS total,
+                          SUM(CASE WHEN status='active' THEN 1 ELSE 0 END)   AS active_count,
+                          SUM(CASE WHEN status='inactive' THEN 1 ELSE 0 END) AS inactive_count,
+                          ROUND(AVG(daily_rate), 2)                   AS avg_daily_rate
+                        FROM employees
+                        """
+                    )).mappings().first()
+
+        return render_template(
+            "admin_portal.html",
+            cfg=Config,
+            tab=tab,
+            subtab=subtab,                 # <-- pass to template
+            employees=employees,
+            employees_metrics=employees_metrics,
+            form_error=None,
+            form_data=None
+        )
 
     @app.get("/admin-portal/employees")
     @login_required
     def admin_portal_employees():
         if not getattr(current_user, "is_admin", False):
             return abort(403)
-        return redirect(url_for("admin_portal", tab="employees"))
+        # Preserve subtab if provided, default to 'manage'
+        subtab = (request.args.get("subtab") or "manage").lower()
+        return redirect(url_for("admin_portal", tab="employees", subtab=subtab))
+
+    # NEW: convenience redirect /admin-portal/employees/<subtab>
+    @app.get("/admin-portal/employees/<string:subtab>")
+    @login_required
+    def admin_portal_employees_subtab(subtab: str):
+        if not getattr(current_user, "is_admin", False):
+            return abort(403)
+        return redirect(url_for("admin_portal", tab="employees", subtab=subtab.lower()))
 
     @app.get("/admin-portal/jobs")
     @login_required
@@ -208,7 +251,7 @@ def create_app(config_override: dict | None = None):
             return abort(403)
         return redirect(url_for("admin_portal", tab="jobs"))
 
-    # Create employee
+    # Create employee (HTML form submit)
     @app.post("/admin-portal/employees")
     @login_required
     def admin_portal_employees_post():
@@ -251,6 +294,7 @@ def create_app(config_override: dict | None = None):
                 "admin_portal.html",
                 cfg=Config,
                 tab="employees",
+                subtab="manage",   # ensure subtab context on error
                 employees=employees,
                 form_error=" ".join(errors),
                 form_data=f,
@@ -271,7 +315,8 @@ def create_app(config_override: dict | None = None):
                 "sd": start_date,
                 "st": status,
             })
-        return redirect(url_for("admin_portal", tab="employees"))
+        # Land back on Employees -> Manage
+        return redirect(url_for("admin_portal", tab="employees", subtab="manage"))
 
     # -------- Attendance API (Admin only) --------
     @app.get("/admin-portal/attendance-data")
@@ -352,6 +397,7 @@ def create_app(config_override: dict | None = None):
     def portal():
         return render_template("portal.html", cfg=Config)
 
+    # ---------- Employees: Create (JSON) ----------
     @app.route("/admin-portal/employees/create", methods=["POST"])
     @login_required
     def admin_portal_employees_create():
@@ -433,10 +479,11 @@ def create_app(config_override: dict | None = None):
     def page_not_found(e):
         return render_template("404.html", cfg=Config), 404
 
-    @app.route("/status/203")
-    def status_203():
-        return render_template("203.html", cfg=Config), 203
+    @app.route("/status/403")
+    def status_403():
+        return render_template("403.html", cfg=Config), 403
 
     return app
+
 
 app = create_app()
