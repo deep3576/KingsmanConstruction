@@ -36,9 +36,11 @@
 
     {% if (subtab or 'dashboard') == 'dashboard' %}
     <h1> Placeholder </h1>
+
+
     {% elif (subtab or 'manage') == 'manage' %}
     <h1> Employee Management</h1>
-    <button id="btnAddEmp" class="btn btn-dark btn-sm collapsible-button">
+    <button id="btnAddEmp" class="btn btn-dark btn-sm collapsible-button ">
       <span class="icon">+</span> Add Employee
     </button>
     <div class="collapsible-content">
@@ -74,11 +76,12 @@
       </div>
   </div>
 
-    {% elif (subtab or 'timesheet') == 'timesheet' %}
 
+
+    {% elif (subtab or 'timesheet') == 'timesheet' %}
     <div class="card" style="padding:16px; margin-top:16px">
         <div class="att-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px">
-          <button id="btnToggleAttendance" class="btn btn-dark btn-sm">Manage Timesheet</button>
+          <button id="btnToggleAttendance" class="btn btn-dark btn-sm collapsible-button"><span class="icon">+</span>Manage Timesheet</button>
           <div id="attMsg" class="inline-msg"></div>
         </div>
 
@@ -133,19 +136,90 @@
         </div>
       </div>
 
+
+
     {% elif (subtab or 'payments') == 'payments' %}
     <h1> Placeholder payments</h1>
     {% endif %}
       <!-- Attendance / Timesheet -->
 
     {% elif tab == 'jobs' %}
-      <div class="portal-actions" style="margin-bottom:12px">
-        <a href="#" class="btn btn-dark btn-sm" aria-disabled="true">+ New Job</a>
-      </div>
       <div class="card" style="overflow:auto">
-        <table class="table"><thead><tr>
-          <th>Job ID</th><th>Title</th><th>Client</th><th>Status</th><th>Updated</th>
-        </tr></thead><tbody><tr><td colspan="5">Jobs UI placeholder.</td></tr></tbody></table>
+        <div class="portal-actions" style="margin-bottom:12px">
+  <button id="btnNewJob" class="btn btn-dark btn-sm">+ New Job</button>
+</div>
+
+<div class="card" style="overflow:auto">
+  <table class="table">
+    <thead>
+      <tr><th>Job ID</th><th>Title</th><th>Client</th><th>Status</th><th>Updated</th></tr>
+    </thead>
+    <tbody>
+      {% if jobs %}
+        {% for j in jobs %}
+          <tr>
+            <td><strong>{{ j.job_code }}</strong></td>
+            <td>{{ j.title }}</td>
+            <td>{{ j.client_name or '—' }}</td>
+            <td><span class="badge">{{ j.status }}</span></td>
+            <td>{{ j.updated_at }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="5">No jobs yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<!-- New Job Modal -->
+<dialog id="jobModal" style="border:none;border-radius:16px;width:min(640px,92vw);padding:0;box-shadow:0 12px 36px rgba(0,0,0,.25)">
+  <form id="jobForm" method="dialog" class="form" style="margin:0">
+    <header style="padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
+      <h3 style="margin:0">New Job</h3>
+      <button type="button" id="jobClose" class="btn btn-light btn-sm">×</button>
+    </header>
+    <div style="padding:16px">
+      <div class="grid2">
+        <input type="text" name="title" placeholder="Job title * (e.g., Driveway Extension)" required>
+        <select name="status">
+          <option value="planned" selected>Planned</option>
+          <option value="in-progress">In Progress</option>
+          <option value="on-hold">On Hold</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+
+      <div class="grid2">
+        <input type="text" name="client_name"  placeholder="Client name">
+        <input type="email" name="client_email" placeholder="Client email">
+      </div>
+      <div class="grid2">
+        <input type="tel"  name="client_phone" placeholder="Client phone">
+        <input type="text" name="date_start"  placeholder="Start of Job (YYYY-MM-DD or DD_MM_YYYY)">
+      </div>
+
+      <!-- Sub-steps -->
+      <h4 style="margin:12px 0 6px">Job Steps</h4>
+      <div class="grid2">
+        <input type="text" name="date_framing" placeholder="Framing (YYYY-MM-DD or DD_MM_YYYY)">
+        <input type="text" name="date_pour"    placeholder="Concrete Pouring (YYYY-MM-DD or DD_MM_YYYY)">
+      </div>
+      <div class="grid2">
+        <input type="text" name="date_dry"     placeholder="Concrete Dry (YYYY-MM-DD or DD_MM_YYYY)">
+        <input type="text" name="date_final"   placeholder="Final Inspection & Closure (YYYY-MM-DD or DD_MM_YYYY)">
+      </div>
+
+      <div id="jobMsg" class="inline-msg"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">
+        <button type="button" id="jobCancel" class="btn btn-light">Cancel</button>
+        <button type="submit" class="btn btn-dark">Create Job</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
       </div>
     {% endif %}
   </div>

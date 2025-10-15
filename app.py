@@ -11,6 +11,19 @@ from config import Config
 from db import engine, ensure_schema
 
 
+def _parse_date_any(s: str | None):
+    """Accept YYYY-MM-DD or DD_MM_YYYY (and a couple variants)."""
+    if not s:
+        return None
+    s = s.strip()
+    for fmt in ("%Y-%m-%d", "%d_%m_%Y", "%d-%m-%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def _require_admin():
     if not current_user.is_authenticated or getattr(current_user, "role", None) != "admin":
         abort(403)
@@ -170,7 +183,7 @@ def create_app(config_override: dict | None = None):
         login_user(UserSession(id=user_id, email=email, role='consumer'))
         return redirect(url_for("portal"))
 
-    # ---------- Admin Portal & Tabs (with Employees subtabs) ----------
+    # ---------- Admin Portal & Tabs (with Employees subtabs & Jobs) ----------
     @app.get("/admin-portal")
     @login_required
     def admin_portal():
@@ -181,7 +194,7 @@ def create_app(config_override: dict | None = None):
         if tab not in ("dashboard", "employees", "jobs"):
             tab = "dashboard"
 
-        # NEW: handle employees subtabs
+        # Employees subtabs
         subtab = None
         if tab == "employees":
             subtab = (request.args.get("subtab") or "manage").lower()
@@ -191,9 +204,10 @@ def create_app(config_override: dict | None = None):
 
         employees = None
         employees_metrics = None
+        jobs = None
 
         if tab == "employees":
-            # Load employees for manage & timesheet views (handy for selectors)
+            # Load employees for manage & timesheet views
             with engine.connect() as conn:
                 employees = conn.execute(text(
                     """
@@ -208,21 +222,39 @@ def create_app(config_override: dict | None = None):
                     employees_metrics = conn.execute(text(
                         """
                         SELECT
-                          COUNT(*)                                   AS total,
+                          COUNT(*) AS total,
                           SUM(CASE WHEN status='active' THEN 1 ELSE 0 END)   AS active_count,
                           SUM(CASE WHEN status='inactive' THEN 1 ELSE 0 END) AS inactive_count,
-                          ROUND(AVG(daily_rate), 2)                   AS avg_daily_rate
+                          ROUND(AVG(daily_rate), 2) AS avg_daily_rate
                         FROM employees
                         """
                     )).mappings().first()
+
+        if tab == "jobs":
+            with engine.connect() as conn:
+                jobs = conn.execute(text(
+                    """
+                    SELECT
+                      id,
+                      job_number,
+                      LPAD(job_number, 3, '0') AS job_code,
+                      title,
+                      client_name,
+                      status,
+                      DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i') AS updated_at
+                    FROM jobs
+                    ORDER BY updated_at DESC, id DESC
+                    """
+                )).mappings().all()
 
         return render_template(
             "admin_portal.html",
             cfg=Config,
             tab=tab,
-            subtab=subtab,                 # <-- pass to template
+            subtab=subtab if tab == "employees" else None,
             employees=employees,
             employees_metrics=employees_metrics,
+            jobs=jobs,
             form_error=None,
             form_data=None
         )
@@ -236,7 +268,7 @@ def create_app(config_override: dict | None = None):
         subtab = (request.args.get("subtab") or "manage").lower()
         return redirect(url_for("admin_portal", tab="employees", subtab=subtab))
 
-    # NEW: convenience redirect /admin-portal/employees/<subtab>
+    # Convenience redirect /admin-portal/employees/<subtab>
     @app.get("/admin-portal/employees/<string:subtab>")
     @login_required
     def admin_portal_employees_subtab(subtab: str):
@@ -251,7 +283,7 @@ def create_app(config_override: dict | None = None):
             return abort(403)
         return redirect(url_for("admin_portal", tab="jobs"))
 
-    # Create employee (HTML form submit)
+    # ---------- Employees: Create (HTML form submit) ----------
     @app.post("/admin-portal/employees")
     @login_required
     def admin_portal_employees_post():
@@ -435,6 +467,71 @@ def create_app(config_override: dict | None = None):
             """), {"id": new_id}).mappings().first()
 
         return jsonify(ok=True, employee=dict(row))
+
+    # ---------- Jobs: Create (3-digit auto code + 5 standard steps) ----------
+    @app.post("/admin-portal/jobs/create")
+    @login_required
+    def admin_portal_jobs_create():
+        _require_admin()
+        data = request.get_json(silent=True) or request.form
+
+        title = (data.get("title") or "").strip()
+        client_name  = (data.get("client_name") or "").strip() or None
+        client_email = (data.get("client_email") or "").strip() or None
+        client_phone = (data.get("client_phone") or "").strip() or None
+        status = (data.get("status") or "planned").strip().lower()
+        if status not in ("planned", "in-progress", "on-hold", "completed", "cancelled"):
+            status = "planned"
+
+        # sub-steps dates: accept YYYY-MM-DD or DD_MM_YYYY
+        d_start  = _parse_date_any(data.get("date_start"))
+        d_frame  = _parse_date_any(data.get("date_framing"))
+        d_pour   = _parse_date_any(data.get("date_pour"))
+        d_dry    = _parse_date_any(data.get("date_dry"))
+        d_final  = _parse_date_any(data.get("date_final"))
+
+        if not title:
+            return jsonify(ok=False, error="Title is required."), 400
+
+        with engine.begin() as conn:
+            # Compute next sequential job_number; display as LPAD(...,3,'0')
+            next_no = conn.execute(text("SELECT COALESCE(MAX(job_number),0)+1 AS n FROM jobs FOR UPDATE")).scalar()
+
+            # Insert main job
+            conn.execute(text("""
+                INSERT INTO jobs (job_number, title, client_name, client_email, client_phone, status, start_date)
+                VALUES (:jn, :ti, :cn, :ce, :cp, :st, :sd)
+            """), {
+                "jn": next_no,
+                "ti": title,
+                "cn": client_name,
+                "ce": client_email,
+                "cp": client_phone,
+                "st": status,
+                "sd": d_start
+            })
+            job_id = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
+
+            # Insert the 5 standard steps
+            steps = [
+                ("start",  "Start of Job",                   d_start),
+                ("framing","Framing",                        d_frame),
+                ("pour",   "Concrete Pouring",               d_pour),
+                ("dry",    "Concrete Dry",                   d_dry),
+                ("final",  "Final Inspection & Job Closure", d_final),
+            ]
+            for key, name, dt in steps:
+                conn.execute(text("""
+                    INSERT INTO job_steps (job_id, step_key, step_name, target_date)
+                    VALUES (:jid, :sk, :sn, :td)
+                """), {"jid": job_id, "sk": key, "sn": name, "td": dt})
+
+            row = conn.execute(text("""
+                SELECT id, job_number, LPAD(job_number,3,'0') AS job_code, title, status
+                FROM jobs WHERE id=:id
+            """), {"id": job_id}).mappings().first()
+
+        return jsonify(ok=True, job=dict(row))
 
     # Update employee status (JSON)
     @app.route("/admin-portal/employees/<int:emp_id>/status", methods=["POST"])

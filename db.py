@@ -96,6 +96,34 @@ def ensure_schema():
           ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
+    jobs="""
+            CREATE TABLE IF NOT EXISTS jobs (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              job_number INT NOT NULL UNIQUE,          -- sequential, used to show 3-digit code
+              title VARCHAR(255) NOT NULL,
+              client_name VARCHAR(255),
+              client_email VARCHAR(255),
+              client_phone VARCHAR(50),
+              status ENUM('planned','in-progress','on-hold','completed','cancelled') DEFAULT 'planned',
+              start_date DATE NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        """
+    jobs_steps="""
+            CREATE TABLE IF NOT EXISTS job_steps (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              job_id INT NOT NULL,
+              step_key VARCHAR(64) NOT NULL,           -- start | framing | pour | dry | final
+              step_name VARCHAR(255) NOT NULL,
+              target_date DATE NULL,
+              completed TINYINT(1) DEFAULT 0,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              CONSTRAINT fk_job_steps_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+              CONSTRAINT uq_job_step UNIQUE (job_id, step_key)
+            )
+        """
 
     with engine.begin() as conn:
         conn.execute(text(sql_users))
@@ -103,3 +131,5 @@ def ensure_schema():
         conn.execute(text(sql_contact_messages))
         conn.execute(text(sql_employees))
         conn.execute(text(sql_employee_status_log))
+        conn.execute(text(jobs))
+        conn.execute(text(jobs_steps))

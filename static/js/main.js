@@ -16,7 +16,50 @@ document.querySelectorAll('.collapsible-button').forEach(button => {
 });
 // Get elements
 
+(function(){
+  const modal  = document.getElementById('jobModal');
+  const openBtn= document.getElementById('btnNewJob');
+  const closeX = document.getElementById('jobClose');
+  const cancel = document.getElementById('jobCancel');
+  const form   = document.getElementById('jobForm');
+  const msg    = document.getElementById('jobMsg');
 
+  function openModal(){
+    if(typeof modal.showModal === 'function') modal.showModal();
+    else modal.setAttribute('open','');
+  }
+  function closeModal(){
+    if(typeof modal.close === 'function') modal.close();
+    else modal.removeAttribute('open');
+  }
+
+  openBtn && openBtn.addEventListener('click', openModal);
+  closeX  && closeX.addEventListener('click', closeModal);
+  cancel  && cancel.addEventListener('click', closeModal);
+
+  form && form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    msg.textContent = '';
+    const fd = new FormData(form);
+    try{
+      const res = await fetch('/admin-portal/jobs/create', {
+        method: 'POST',
+        body: fd
+      });
+      const data = await res.json();
+      if(!res.ok || !data.ok){
+        msg.textContent = data.error || 'Failed to create job.';
+        msg.classList.remove('success'); msg.classList.add('error');
+        return;
+      }
+      // success → refresh to show new row
+      window.location.href = '/admin-portal?tab=jobs';
+    }catch(err){
+      msg.textContent = 'Network error. Please try again.';
+      msg.classList.remove('success'); msg.classList.add('error');
+    }
+  });
+})();
 
 
 
