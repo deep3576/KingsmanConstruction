@@ -3,224 +3,340 @@
 <section class="portal-wrap">
   <div class="portal-card">
     <h1>Admin Portal</h1>
-    <p class="lead">Welcome{% if current_user.is_authenticated %}, {{ current_user.email }}{% endif %}.</p>
+    <p class="lead">Welcome{% if current_user.is_authenticated %}, {{ current_user.display_name }}{% endif %}.</p>
 
+    <!-- Main tabs -->
     <nav class="tabs" aria-label="Admin sections">
-      <a href="{{ url_for('admin_portal', tab='dashboard') }}" class="{% if (tab or 'dashboard') == 'dashboard' %}active{% endif %}">Dashboard</a>
-      <a href="{{ url_for('admin_portal', tab='employees') }}" class="{% if tab == 'employees' %}active{% endif %}">Employees</a>
-      <a href="{{ url_for('admin_portal', tab='jobs') }}" class="{% if tab == 'jobs' %}active{% endif %}">Jobs</a>
+      <a href="{{ url_for('admin_portal', tab='dashboard') }}"
+         class="{% if (tab or 'dashboard') == 'dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="{{ url_for('admin_portal', tab='employees') }}"
+         class="{% if tab == 'employees' %}active{% endif %}">Employees</a>
+      <a href="{{ url_for('admin_portal', tab='jobs') }}"
+         class="{% if tab == 'jobs' %}active{% endif %}">Jobs</a>
     </nav>
 
     {% if (tab or 'dashboard') == 'dashboard' %}
+      <!-- ===== Dashboard ===== -->
       <div class="cards" style="grid-template-columns:repeat(3,1fr); gap:14px">
-        <article class="card" style="padding:16px"><h3 style="margin:0 0 8px">New Messages</h3><p class="form-msg">(coming soon)</p></article>
-        <article class="card" style="padding:16px"><h3 style="margin:0 0 8px">Active Users</h3><p class="form-msg">(coming soon)</p></article>
-        <article class="card" style="padding:16px"><h3 style="margin:0 0 8px">Open Jobs</h3><p class="form-msg">(coming soon)</p></article>
+        <article class="card" style="padding:16px">
+          <h3 style="margin:0 0 8px">New Messages</h3>
+          <p class="form-msg">(coming soon)</p>
+        </article>
+        <article class="card" style="padding:16px">
+          <h3 style="margin:0 0 8px">Active Users</h3>
+          <p class="form-msg">(coming soon)</p>
+        </article>
+        <article class="card" style="padding:16px">
+          <h3 style="margin:0 0 8px">Open Jobs</h3>
+          <p class="form-msg">(coming soon)</p>
+        </article>
       </div>
 
     {% elif tab == 'employees' %}
-      <!-- Toolbar -->
-    <nav class="tabs" aria-label="Employees">
-    <a href="{{ url_for('admin_portal', tab='employees', subtab='dashboard') }}"
-     class="{{ 'active' if (subtab or 'dashboard') == 'dashboard' else '' }}">Overview</a>
+      <!-- ===== Employees ===== -->
+      <nav class="tabs" aria-label="Employees">
+        <a href="{{ url_for('admin_portal', tab='employees', subtab='dashboard') }}"
+           class="{{ 'active' if (subtab or 'dashboard') == 'dashboard' else '' }}">Overview</a>
+        <a href="{{ url_for('admin_portal', tab='employees', subtab='timesheet') }}"
+           class="{{ 'active' if subtab == 'timesheet' else '' }}">TimeSheet</a>
+        <a href="{{ url_for('admin_portal', tab='employees', subtab='manage') }}"
+           class="{{ 'active' if subtab == 'manage' else '' }}">Manage</a>
+        <a href="{{ url_for('admin_portal', tab='employees', subtab='payments') }}"
+           class="{{ 'active' if subtab == 'payments' else '' }}">Payments</a>
+      </nav>
 
-    <a href="{{ url_for('admin_portal', tab='employees', subtab='timesheet') }}"
-     class="{{ 'active' if subtab == 'timesheet' else '' }}">TimeSheet</a>
-
-    <a href="{{ url_for('admin_portal', tab='employees', subtab='manage') }}"
-     class="{{ 'active' if subtab == 'manage' else '' }}">Manage</a>
-
-    <a href="{{ url_for('admin_portal', tab='employees', subtab='payments') }}"
-     class="{{ 'active' if subtab == 'payments' else '' }}">Payments</a>
-  </nav>
-
-    {% if (subtab or 'dashboard') == 'dashboard' %}
-    <h1> Placeholder </h1>
-
-
-    {% elif (subtab or 'manage') == 'manage' %}
-    <h1> Employee Management</h1>
-    <button id="btnAddEmp" class="btn btn-dark btn-sm collapsible-button ">
-      <span class="icon">+</span> Add Employee
-    </button>
-    <div class="collapsible-content">
-            <div id="empFormCard" class="card hidden" style="padding:16px">
-        <h3 style="margin:0 0 10px">Add employee</h3>
-        <form id="empForm" class="form">
-          <div class="grid2">
-            <input type="text" name="full_name" placeholder="Full name *" required />
-            <input type="text" name="job_title" placeholder="Job title" />
-          </div>
-          <div class="grid2">
-            <input type="email" name="email" placeholder="Email" />
-            <input type="tel" name="phone" placeholder="Phone" />
-          </div>
-          <div class="grid2">
-            <input type="number" name="daily_rate" placeholder="Daily rate (CAD) *" step="0.01" min="0" required />
-            <input type="date" name="start_date" />
-          </div>
-          <div class="grid2">
-            <select name="status">
-              <option value="active" selected>Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <div></div>
-          </div>
-
-          <div id="empFormMsg" class="inline-msg"></div>
-          <div style="display:flex; gap:8px; margin-top:8px">
-            <button type="submit" class="btn btn-dark">Save</button>
-            <button type="button" id="empFormCancel" class="btn btn-light">Cancel</button>
-          </div>
-        </form>
-      </div>
-  </div>
-
-
-
-    {% elif (subtab or 'timesheet') == 'timesheet' %}
-    <div class="card" style="padding:16px; margin-top:16px">
-        <div class="att-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px">
-          <button id="btnToggleAttendance" class="btn btn-dark btn-sm collapsible-button"><span class="icon">+</span>Manage Timesheet</button>
-          <div id="attMsg" class="inline-msg"></div>
+      {% if (subtab or 'dashboard') == 'dashboard' %}
+        <!-- Overview -->
+        <div class="cards" style="grid-template-columns:repeat(4,1fr); gap:14px">
+          <article class="card kpi"><h3>Total Employees</h3><strong>{{ employees_metrics.total if employees_metrics else 0 }}</strong></article>
+          <article class="card kpi"><h3>Active</h3><strong>{{ employees_metrics.active_count if employees_metrics else 0 }}</strong></article>
+          <article class="card kpi"><h3>Inactive</h3><strong>{{ employees_metrics.inactive_count if employees_metrics else 0 }}</strong></article>
+          <article class="card kpi"><h3>Avg Daily Rate</h3><strong>${{ '%.2f'|format(employees_metrics.avg_daily_rate) if employees_metrics and employees_metrics.avg_daily_rate is not none else '0.00' }}</strong></article>
         </div>
 
-        <div id="attendancePanel" class="attendance-wrap hidden" style="margin-top:12px">
-          <div class="att-controls">
-            <label>Employee
-              <select id="attEmployee">
-                <option value="">Select an employee…</option>
-                {% for e in employees or [] %}
-                  <option value="{{ e.id }}">{{ e.full_name }}</option>
+      {% elif (subtab or 'manage') == 'manage' %}
+        <!-- Manage employees -->
+        <div class="portal-actions" style="margin-bottom:12px">
+          <button id="btnNewEmployee" class="btn btn-dark btn-sm">+ Add Employee</button>
+        </div>
+
+        <!-- Employees table -->
+        <div class="card" style="overflow:auto">
+          <table id="employeesTable" class="table">
+            <thead>
+              <tr>
+                <th>Full name</th>
+                <th>Job title</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Daily rate</th>
+                <th>Status</th>
+                <th>Start date</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if employees and employees|length > 0 %}
+                {% for e in employees %}
+                  <tr>
+                    <td>{{ e.full_name }}</td>
+                    <td>{{ e.job_title or '-' }}</td>
+                    <td>{{ e.email or '-' }}</td>
+                    <td>{{ e.phone or '-' }}</td>
+                    <td>${{ '%.2f'|format(e.daily_rate) if e.daily_rate is not none else '0.00' }}</td>
+                    <td>
+                      <select class="emp-status" data-id="{{ e.id }}">
+                        <option value="active"  {{ 'selected' if e.status=='active' else '' }}>Active</option>
+                        <option value="inactive" {{ 'selected' if e.status=='inactive' else '' }}>Inactive</option>
+                      </select>
+                      <small class="row-msg" id="empRowMsg-{{ e.id }}"></small>
+                    </td>
+                    <td>{{ e.start_date or '-' }}</td>
+                    <td>{{ e.updated_at or '' }}</td>
+                  </tr>
                 {% endfor %}
-              </select>
-            </label>
+              {% else %}
+                <tr><td colspan="8">No employees yet.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
 
-            <div class="att-monthnav">
-              <button type="button" class="btn btn-light btn-sm" data-att="prev">◀</button>
-              <strong id="attMonthLabel">Month YYYY</strong>
-              <button type="button" class="btn btn-light btn-sm" data-att="next">▶</button>
+        <!-- New Employee Modal -->
+        <dialog id="employeeModal" class="modal">
+          <form id="empForm" class="form modal-body">
+            <header class="modal-head">
+              <h3>New Employee</h3>
+              <button type="button" id="employeeClose" class="btn btn-light btn-sm">×</button>
+            </header>
+
+            <div class="modal-content">
+              <div class="grid2">
+                <input type="text" name="full_name" placeholder="Full name *" required />
+                <input type="text" name="job_title" placeholder="Job title" />
+              </div>
+              <div class="grid2">
+                <input type="email" name="email" placeholder="Email" />
+                <input type="tel" name="phone" placeholder="Phone" />
+              </div>
+              <div class="grid2">
+                <input type="number" name="daily_rate" placeholder="Daily rate (CAD) *" step="0.01" min="0" required />
+                <input type="date" name="start_date" />
+              </div>
+              <div class="grid2">
+                <select name="status">
+                  <option value="active" selected>Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+                <div></div>
+              </div>
+
+              <div id="empFormMsg" class="inline-msg"></div>
+              <div class="modal-actions">
+                <button type="button" id="employeeCancel" class="btn btn-light">Cancel</button>
+                <button type="submit" class="btn btn-dark">Save</button>
+              </div>
             </div>
-          </div>
+          </form>
+        </dialog>
 
-          <div class="calendar">
-            <div class="cal-header">
-              <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      {% elif (subtab or 'timesheet') == 'timesheet' %}
+        <!-- Timesheet -->
+        <div class="card" style="padding:16px; margin-top:16px">
+          <div class="att-head">
+            <div class="att-head-left">
+              <button id="btnNewTs" class="btn btn-light btn-sm">+ Fill Time Sheet</button>
             </div>
-            <div id="calGrid" class="cal-grid"></div>
+            <div id="attMsg" class="inline-msg"></div>
           </div>
 
-          <div class="att-editor">
-            <h3>Selected day</h3>
-            <div id="attSelectedDate" class="muted">—</div>
-            <label>Status
-              <select id="attStatus">
-                <option value="present">Present</option>
-                <option value="absent">Absent</option>
-                <option value="half-day">Half-day</option>
-                <option value="leave">Leave</option>
-              </select>
-            </label>
-            <label>Sign-in <input id="attIn" type="time" /></label>
-            <label>Sign-out <input id="attOut" type="time" /></label>
-            <label>Notes <input id="attNotes" type="text" placeholder="Optional" /></label>
-            <button id="attSave" class="btn btn-dark btn-sm" type="button">Save</button>
-          </div>
+          <div id="attendancePanel" class="attendance-wrap hidden">
+            <div class="att-controls">
+              <label>Employee
+                <select id="attEmployee">
+                  <option value="">Select an employee…</option>
+                  {% for e in employees or [] %}
+                    <option value="{{ e.id }}">{{ e.full_name }}</option>
+                  {% endfor %}
+                </select>
+              </label>
 
-          <div class="att-legend">
-            <span class="pill present">Present</span>
-            <span class="pill absent">Absent</span>
-            <span class="pill half">Half-day</span>
-            <span class="pill leave">Leave</span>
+              <div class="att-monthnav">
+                <button type="button" class="btn btn-light btn-sm" data-att="prev">◀</button>
+                <strong id="attMonthLabel">Month YYYY</strong>
+                <button type="button" class="btn btn-light btn-sm" data-att="next">▶</button>
+              </div>
+            </div>
+
+            <div class="calendar">
+              <div class="cal-header">
+                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+              </div>
+              <div id="calGrid" class="cal-grid"></div>
+            </div>
+
+            <div class="att-editor">
+              <h3>Selected day</h3>
+              <div id="attSelectedDate" class="muted">—</div>
+              <label>Status
+                <select id="attStatus">
+                  <option value="present">Present</option>
+                  <option value="absent">Absent</option>
+                  <option value="half-day">Half-day</option>
+                  <option value="leave">Leave</option>
+                </select>
+              </label>
+              <label>Sign-in <input id="attIn" type="time" /></label>
+              <label>Sign-out <input id="attOut" type="time" /></label>
+              <label>Notes <input id="attNotes" type="text" placeholder="Optional" /></label>
+              <button id="attSave" class="btn btn-dark btn-sm" type="button">Save</button>
+            </div>
+
+            <div class="att-legend">
+              <span class="pill present">Present</span>
+              <span class="pill absent">Absent</span>
+              <span class="pill half">Half-day</span>
+              <span class="pill leave">Leave</span>
+            </div>
           </div>
         </div>
-      </div>
 
+        <!-- TimeSheet quick-add modal -->
+        <dialog id="tsModal" class="modal">
+          <form id="tsForm" class="form modal-body">
+            <header class="modal-head">
+              <h3>New Timesheet Entry</h3>
+              <button type="button" id="tsClose" class="btn btn-light btn-sm">×</button>
+            </header>
+            <div class="modal-content">
+              <div class="grid2">
+                <label>Employee
+                  <select name="employee_id" id="tsEmployee" required>
+                    <option value="">Select…</option>
+                    {% for e in employees or [] %}
+                      <option value="{{ e.id }}">{{ e.full_name }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label>Date
+                  <input type="date" name="date" id="tsDate" required>
+                </label>
+              </div>
 
+              <div class="grid2">
+                <label>Status
+                  <select name="status" id="tsStatus">
+                    <option value="present" selected>Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="half-day">Half-day</option>
+                    <option value="leave">Leave</option>
+                  </select>
+                </label>
+                <div></div>
+              </div>
 
-    {% elif (subtab or 'payments') == 'payments' %}
-    <h1> Placeholder payments</h1>
-    {% endif %}
-      <!-- Attendance / Timesheet -->
+              <div class="grid2">
+                <label>Sign-in <input type="time" name="sign_in_time" id="tsIn"></label>
+                <label>Sign-out <input type="time" name="sign_out_time" id="tsOut"></label>
+              </div>
+
+              <label>Notes <input type="text" name="notes" id="tsNotes" placeholder="Optional"></label>
+
+              <div id="tsMsg" class="inline-msg"></div>
+              <div class="modal-actions">
+                <button type="button" id="tsCancel" class="btn btn-light">Cancel</button>
+                <button type="submit" class="btn btn-dark">Save Entry</button>
+              </div>
+            </div>
+          </form>
+        </dialog>
+
+      {% elif (subtab or 'payments') == 'payments' %}
+        <h2>Payments</h2>
+        <p class="form-msg">(coming soon)</p>
+      {% endif %}
 
     {% elif tab == 'jobs' %}
+      <!-- ===== Jobs ===== -->
+      <div class="portal-actions" style="margin-bottom:12px">
+        <button id="btnNewJob" class="btn btn-dark btn-sm">+ New Job</button>
+      </div>
+
       <div class="card" style="overflow:auto">
-        <div class="portal-actions" style="margin-bottom:12px">
-  <button id="btnNewJob" class="btn btn-dark btn-sm">+ New Job</button>
-</div>
-
-<div class="card" style="overflow:auto">
-  <table class="table">
-    <thead>
-      <tr><th>Job ID</th><th>Title</th><th>Client</th><th>Status</th><th>Updated</th></tr>
-    </thead>
-    <tbody>
-      {% if jobs %}
-        {% for j in jobs %}
-          <tr>
-            <td><strong>{{ j.job_code }}</strong></td>
-            <td>{{ j.title }}</td>
-            <td>{{ j.client_name or '—' }}</td>
-            <td><span class="badge">{{ j.status }}</span></td>
-            <td>{{ j.updated_at }}</td>
-          </tr>
-        {% endfor %}
-      {% else %}
-        <tr><td colspan="5">No jobs yet.</td></tr>
-      {% endif %}
-    </tbody>
-  </table>
-</div>
-
-<!-- New Job Modal -->
-<dialog id="jobModal" style="border:none;border-radius:16px;width:min(640px,92vw);padding:0;box-shadow:0 12px 36px rgba(0,0,0,.25)">
-  <form id="jobForm" method="dialog" class="form" style="margin:0">
-    <header style="padding:14px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">
-      <h3 style="margin:0">New Job</h3>
-      <button type="button" id="jobClose" class="btn btn-light btn-sm">×</button>
-    </header>
-    <div style="padding:16px">
-      <div class="grid2">
-        <input type="text" name="title" placeholder="Job title * (e.g., Driveway Extension)" required>
-        <select name="status">
-          <option value="planned" selected>Planned</option>
-          <option value="in-progress">In Progress</option>
-          <option value="on-hold">On Hold</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Title</th>
+              <th>Client</th>
+              <th>Status</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if jobs %}
+              {% for j in jobs %}
+                <tr>
+                  <td><strong>{{ j.job_code }}</strong></td>
+                  <td>{{ j.title }}</td>
+                  <td>{{ j.client_name or '—' }}</td>
+                  <td><span class="badge">{{ j.status }}</span></td>
+                  <td>{{ j.updated_at }}</td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="5">No jobs yet.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </div>
 
-      <div class="grid2">
-        <input type="text" name="client_name"  placeholder="Client name">
-        <input type="email" name="client_email" placeholder="Client email">
-      </div>
-      <div class="grid2">
-        <input type="tel"  name="client_phone" placeholder="Client phone">
-        <input type="text" name="date_start"  placeholder="Start of Job (YYYY-MM-DD or DD_MM_YYYY)">
-      </div>
+      <!-- New Job Modal -->
+      <dialog id="jobModal" class="modal">
+        <form id="jobForm" method="dialog" class="form modal-body">
+          <header class="modal-head">
+            <h3>New Job</h3>
+            <button type="button" id="jobClose" class="btn btn-light btn-sm">×</button>
+          </header>
+          <div class="modal-content">
+            <div class="grid2">
+              <input type="text" name="title" placeholder="Job title * (e.g., Driveway Extension)" required>
+              <select name="status">
+                <option value="planned" selected>Planned</option>
+                <option value="in-progress">In Progress</option>
+                <option value="on-hold">On Hold</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
 
-      <!-- Sub-steps -->
-      <h4 style="margin:12px 0 6px">Job Steps</h4>
-      <div class="grid2">
-        <input type="text" name="date_framing" placeholder="Framing (YYYY-MM-DD or DD_MM_YYYY)">
-        <input type="text" name="date_pour"    placeholder="Concrete Pouring (YYYY-MM-DD or DD_MM_YYYY)">
-      </div>
-      <div class="grid2">
-        <input type="text" name="date_dry"     placeholder="Concrete Dry (YYYY-MM-DD or DD_MM_YYYY)">
-        <input type="text" name="date_final"   placeholder="Final Inspection & Closure (YYYY-MM-DD or DD_MM_YYYY)">
-      </div>
+            <div class="grid2">
+              <input type="text" name="client_name"  placeholder="Client name">
+              <input type="email" name="client_email" placeholder="Client email">
+            </div>
+            <div class="grid2">
+              <input type="tel"  name="client_phone" placeholder="Client phone">
+              <input type="text" name="date_start"  placeholder="Start of Job (YYYY-MM-DD or DD_MM_YYYY)">
+            </div>
 
-      <div id="jobMsg" class="inline-msg"></div>
-      <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">
-        <button type="button" id="jobCancel" class="btn btn-light">Cancel</button>
-        <button type="submit" class="btn btn-dark">Create Job</button>
-      </div>
-    </div>
-  </form>
-</dialog>
+            <h4 style="margin:12px 0 6px">Job Steps</h4>
+            <div class="grid2">
+              <input type="text" name="date_framing" placeholder="Framing (YYYY-MM-DD or DD_MM_YYYY)">
+              <input type="text" name="date_pour"    placeholder="Concrete Pouring (YYYY-MM-DD or DD_MM_YYYY)">
+            </div>
+            <div class="grid2">
+              <input type="text" name="date_dry"     placeholder="Concrete Dry (YYYY-MM-DD or DD_MM_YYYY)">
+              <input type="text" name="date_final"   placeholder="Final Inspection & Closure (YYYY-MM-DD or DD_MM_YYYY)">
+            </div>
 
-      </div>
+            <div id="jobMsg" class="inline-msg"></div>
+            <div class="modal-actions">
+              <button type="button" id="jobCancel" class="btn btn-light">Cancel</button>
+              <button type="submit" class="btn btn-dark">Create Job</button>
+            </div>
+          </div>
+        </form>
+      </dialog>
     {% endif %}
   </div>
 </section>

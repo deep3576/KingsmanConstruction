@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, date
 from calendar import monthrange
+
 from flask import Flask, render_template, request, jsonify, redirect, url_for, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -11,8 +12,9 @@ from config import Config
 from db import engine, ensure_schema
 
 
+# ---------- Helpers ----------
 def _parse_date_any(s: str | None):
-    """Accept YYYY-MM-DD or DD_MM_YYYY (and a couple variants)."""
+    """Accepts YYYY-MM-DD, DD_MM_YYYY, DD-MM-YYYY, DD/MM/YYYY → date | None."""
     if not s:
         return None
     s = s.strip()
@@ -29,12 +31,28 @@ def _require_admin():
         abort(403)
 
 
+def _next_job_number(conn):
+    """
+    Generate a 3+ digit zero-padded job_number (001, 002, ... 123, ...).
+    Uses MAX(CAST(job_number AS UNSIGNED)) when possible, falls back to MAX(id).
+    """
+    row = conn.execute(text("SELECT MAX(CAST(job_number AS UNSIGNED)) AS mx FROM jobs")).mappings().first()
+    if row and row["mx"]:
+        nxt = int(row["mx"]) + 1
+    else:
+        # Fallback if job_number not used yet
+        rid = conn.execute(text("SELECT COALESCE(MAX(id), 0) AS mid FROM jobs")).scalar() or 0
+        nxt = int(rid) + 1
+    return f"{nxt:03d}"
+
+
 # --- Minimal user session object for Flask-Login (no ORM) ---
 @dataclass
 class UserSession:
     id: int
     email: str
     role: str | None = None
+    full_name: str | None = None  # hydrated from users.full_name or consumer_profiles.full_name
 
     # Flask-Login requirements
     @property
@@ -48,6 +66,13 @@ class UserSession:
     @property
     def is_admin(self) -> bool:
         return (self.role or '').lower() == 'admin'
+
+    @property
+    def display_name(self) -> str:
+        """Prefer full_name; fall back to email local-part."""
+        if (self.full_name or "").strip():
+            return self.full_name.strip()
+        return (self.email or "").split("@", 1)[0]
 
 
 login_manager = LoginManager()
@@ -68,16 +93,26 @@ def create_app(config_override: dict | None = None):
 
     @login_manager.user_loader
     def load_user(user_id: str):
+        """
+        Hydrate current_user each request: prefer users.full_name,
+        else consumer_profiles.full_name (for consumers).
+        """
         try:
             with engine.connect() as conn:
-                row = conn.execute(
-                    text("SELECT id, email, role FROM users WHERE id=:id"),
-                    {"id": int(user_id)}
-                ).mappings().first()
+                row = conn.execute(text("""
+                    SELECT
+                        u.id, u.email, u.role,
+                        COALESCE(u.full_name, cp.full_name) AS full_name
+                    FROM users u
+                    LEFT JOIN consumer_profiles cp ON cp.user_id = u.id
+                    WHERE u.id = :id
+                    LIMIT 1
+                """), {"id": int(user_id)}).mappings().first()
                 return UserSession(**row) if row else None
         except Exception:
             return None
 
+    # ---------- Public ----------
     @app.route("/")
     def index():
         return render_template("index.html", cfg=Config)
@@ -94,13 +129,21 @@ def create_app(config_override: dict | None = None):
         email = (request.form.get("email") or "").strip().lower()
         password = (request.form.get("password") or "").strip()
         with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT id, email, role, password_hash FROM users WHERE email=:e LIMIT 1"),
-                {"e": email}
-            ).mappings().first()
+            row = conn.execute(text("""
+                SELECT
+                  u.id, u.email, u.role, u.password_hash,
+                  COALESCE(u.full_name, cp.full_name) AS full_name
+                FROM users u
+                LEFT JOIN consumer_profiles cp ON cp.user_id = u.id
+                WHERE u.email = :e
+                LIMIT 1
+            """), {"e": email}).mappings().first()
         if not row or not check_password_hash(row["password_hash"], password):
             return render_template("login.html", cfg=Config, error="Invalid email or password."), 401
-        login_user(UserSession(id=row["id"], email=row["email"], role=row["role"]))
+
+        login_user(UserSession(
+            id=row["id"], email=row["email"], role=row["role"], full_name=row["full_name"]
+        ))
         dest = request.args.get("next")
         if not dest:
             dest = url_for("admin_portal") if (row["role"] or "").lower() == "admin" else url_for("portal")
@@ -157,8 +200,8 @@ def create_app(config_override: dict | None = None):
         pw_hash = generate_password_hash(pwd)
         with engine.begin() as conn:
             res = conn.execute(
-                text("INSERT INTO users (email, password_hash, role) VALUES (:e, :p, 'consumer')"),
-                {"e": email, "p": pw_hash},
+                text("INSERT INTO users (email, password_hash, role, full_name) VALUES (:e, :p, 'consumer', :fn)"),
+                {"e": email, "p": pw_hash, "fn": f"{first} {last}".strip()},
             )
             user_id = res.lastrowid
             conn.execute(
@@ -180,10 +223,10 @@ def create_app(config_override: dict | None = None):
                     "pc": postal_code,
                 },
             )
-        login_user(UserSession(id=user_id, email=email, role='consumer'))
+        login_user(UserSession(id=user_id, email=email, role='consumer', full_name=f"{first} {last}".strip()))
         return redirect(url_for("portal"))
 
-    # ---------- Admin Portal & Tabs (with Employees subtabs & Jobs) ----------
+    # ---------- Admin Portal & Tabs (with Employees subtabs) ----------
     @app.get("/admin-portal")
     @login_required
     def admin_portal():
@@ -194,20 +237,17 @@ def create_app(config_override: dict | None = None):
         if tab not in ("dashboard", "employees", "jobs"):
             tab = "dashboard"
 
-        # Employees subtabs
         subtab = None
-        if tab == "employees":
-            subtab = (request.args.get("subtab") or "manage").lower()
-            allowed_subtabs = {"manage", "timesheet", "dashboard", "payments"}
-            if subtab not in allowed_subtabs:
-                subtab = "manage"
-
         employees = None
         employees_metrics = None
         jobs = None
 
         if tab == "employees":
-            # Load employees for manage & timesheet views
+            subtab = (request.args.get("subtab") or "dashboard").lower()
+            if subtab not in {"manage", "timesheet", "dashboard", "payments"}:
+                subtab = "manage"
+
+            # Load employees
             with engine.connect() as conn:
                 employees = conn.execute(text(
                     """
@@ -217,7 +257,7 @@ def create_app(config_override: dict | None = None):
                     """
                 )).mappings().all()
 
-                # Simple metrics for the Employees->Dashboard subtab
+                # Overview metrics
                 if subtab == "dashboard":
                     employees_metrics = conn.execute(text(
                         """
@@ -230,20 +270,14 @@ def create_app(config_override: dict | None = None):
                         """
                     )).mappings().first()
 
-        if tab == "jobs":
+        elif tab == "jobs":
+            # List jobs for table
             with engine.connect() as conn:
                 jobs = conn.execute(text(
                     """
-                    SELECT
-                      id,
-                      job_number,
-                      LPAD(job_number, 3, '0') AS job_code,
-                      title,
-                      client_name,
-                      status,
-                      DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i') AS updated_at
+                    SELECT id, job_number, title, client_name, status, updated_at
                     FROM jobs
-                    ORDER BY updated_at DESC, id DESC
+                    ORDER BY updated_at DESC
                     """
                 )).mappings().all()
 
@@ -251,7 +285,7 @@ def create_app(config_override: dict | None = None):
             "admin_portal.html",
             cfg=Config,
             tab=tab,
-            subtab=subtab if tab == "employees" else None,
+            subtab=subtab,
             employees=employees,
             employees_metrics=employees_metrics,
             jobs=jobs,
@@ -262,33 +296,27 @@ def create_app(config_override: dict | None = None):
     @app.get("/admin-portal/employees")
     @login_required
     def admin_portal_employees():
-        if not getattr(current_user, "is_admin", False):
-            return abort(403)
-        # Preserve subtab if provided, default to 'manage'
+        _require_admin()
         subtab = (request.args.get("subtab") or "manage").lower()
         return redirect(url_for("admin_portal", tab="employees", subtab=subtab))
 
-    # Convenience redirect /admin-portal/employees/<subtab>
     @app.get("/admin-portal/employees/<string:subtab>")
     @login_required
     def admin_portal_employees_subtab(subtab: str):
-        if not getattr(current_user, "is_admin", False):
-            return abort(403)
+        _require_admin()
         return redirect(url_for("admin_portal", tab="employees", subtab=subtab.lower()))
 
     @app.get("/admin-portal/jobs")
     @login_required
     def admin_portal_jobs():
-        if not getattr(current_user, "is_admin", False):
-            return abort(403)
+        _require_admin()
         return redirect(url_for("admin_portal", tab="jobs"))
 
-    # ---------- Employees: Create (HTML form submit) ----------
+    # ---------- Employees: Create (HTML form submit from legacy view) ----------
     @app.post("/admin-portal/employees")
     @login_required
     def admin_portal_employees_post():
-        if not getattr(current_user, "is_admin", False):
-            return abort(403)
+        _require_admin()
         f = request.form
         full_name = (f.get("full_name") or "").strip()
         job_title = (f.get("job_title") or "").strip()
@@ -326,7 +354,7 @@ def create_app(config_override: dict | None = None):
                 "admin_portal.html",
                 cfg=Config,
                 tab="employees",
-                subtab="manage",   # ensure subtab context on error
+                subtab="manage",
                 employees=employees,
                 form_error=" ".join(errors),
                 form_data=f,
@@ -347,89 +375,9 @@ def create_app(config_override: dict | None = None):
                 "sd": start_date,
                 "st": status,
             })
-        # Land back on Employees -> Manage
         return redirect(url_for("admin_portal", tab="employees", subtab="manage"))
 
-    # -------- Attendance API (Admin only) --------
-    @app.get("/admin-portal/attendance-data")
-    @login_required
-    def attendance_data():
-        if not getattr(current_user, "is_admin", False):
-            return abort(403)
-        try:
-            employee_id = int(request.args.get("employee_id") or 0)
-            year = int(request.args.get("year") or date.today().year)
-            month = int(request.args.get("month") or date.today().month)
-        except ValueError:
-            return jsonify({"ok": False, "error": "Invalid parameters."}), 400
-        if not employee_id:
-            return jsonify({"ok": True, "days": {}, "year": year, "month": month})
-        first_day = date(year, month, 1)
-        last_day = date(year, month, monthrange(year, month)[1])
-        with engine.connect() as conn:
-            rows = conn.execute(text(
-                """
-                SELECT work_date, status,
-                       TIME_FORMAT(sign_in, '%H:%i') AS sign_in,
-                       TIME_FORMAT(sign_out, '%H:%i') AS sign_out,
-                       notes
-                FROM employee_status_log
-                WHERE employee_id=:eid AND work_date BETWEEN :d1 AND :d2
-                ORDER BY work_date
-                """
-            ), {"eid": employee_id, "d1": first_day, "d2": last_day}).mappings().all()
-        days = {r["work_date"].isoformat(): {"status": r["status"], "sign_in": r["sign_in"], "sign_out": r["sign_out"], "notes": r["notes"]} for r in rows}
-        return jsonify({"ok": True, "days": days, "year": year, "month": month})
-
-    @app.post("/admin-portal/attendance-save")
-    @login_required
-    def attendance_save():
-        if not getattr(current_user, "is_admin", False):
-            return abort(403)
-        data = request.get_json(silent=True) or {}
-        try:
-            employee_id = int(data.get("employee_id") or 0)
-            work_date = data.get("date")  # YYYY-MM-DD
-            status = (data.get("status") or "present").lower()
-            if status not in ("present", "absent", "half-day", "leave"):
-                status = "present"
-            sin = (data.get("sign_in_time") or "").strip()  # HH:MM
-            sout = (data.get("sign_out_time") or "").strip()  # HH:MM
-            notes = (data.get("notes") or "").strip() or None
-        except Exception:
-            return jsonify({"ok": False, "error": "Invalid payload."}), 400
-        if not employee_id or not work_date:
-            return jsonify({"ok": False, "error": "employee_id and date are required."}), 400
-
-        sign_in_dt = None
-        sign_out_dt = None
-        try:
-            if sin:
-                datetime.strptime(sin, "%H:%M")
-                sign_in_dt = f"{work_date} {sin}:00"
-            if sout:
-                datetime.strptime(sout, "%H:%M")
-                sign_out_dt = f"{work_date} {sout}:00"
-        except ValueError:
-            return jsonify({"ok": False, "error": "Time must be HH:MM."}), 400
-
-        with engine.begin() as conn:
-            conn.execute(text(
-                """
-                INSERT INTO employee_status_log (employee_id, work_date, status, sign_in, sign_out, notes)
-                VALUES (:eid, :d, :st, :si, :so, :n)
-                ON DUPLICATE KEY UPDATE
-                  status=VALUES(status), sign_in=VALUES(sign_in), sign_out=VALUES(sign_out), notes=VALUES(notes)
-                """
-            ), {"eid": employee_id, "d": work_date, "st": status, "si": sign_in_dt, "so": sign_out_dt, "n": notes})
-        return jsonify({"ok": True})
-
-    @app.get("/portal")
-    @login_required
-    def portal():
-        return render_template("portal.html", cfg=Config)
-
-    # ---------- Employees: Create (JSON) ----------
+    # ---------- Employees: Create (JSON, modal) ----------
     @app.route("/admin-portal/employees/create", methods=["POST"])
     @login_required
     def admin_portal_employees_create():
@@ -468,72 +416,7 @@ def create_app(config_override: dict | None = None):
 
         return jsonify(ok=True, employee=dict(row))
 
-    # ---------- Jobs: Create (3-digit auto code + 5 standard steps) ----------
-    @app.post("/admin-portal/jobs/create")
-    @login_required
-    def admin_portal_jobs_create():
-        _require_admin()
-        data = request.get_json(silent=True) or request.form
-
-        title = (data.get("title") or "").strip()
-        client_name  = (data.get("client_name") or "").strip() or None
-        client_email = (data.get("client_email") or "").strip() or None
-        client_phone = (data.get("client_phone") or "").strip() or None
-        status = (data.get("status") or "planned").strip().lower()
-        if status not in ("planned", "in-progress", "on-hold", "completed", "cancelled"):
-            status = "planned"
-
-        # sub-steps dates: accept YYYY-MM-DD or DD_MM_YYYY
-        d_start  = _parse_date_any(data.get("date_start"))
-        d_frame  = _parse_date_any(data.get("date_framing"))
-        d_pour   = _parse_date_any(data.get("date_pour"))
-        d_dry    = _parse_date_any(data.get("date_dry"))
-        d_final  = _parse_date_any(data.get("date_final"))
-
-        if not title:
-            return jsonify(ok=False, error="Title is required."), 400
-
-        with engine.begin() as conn:
-            # Compute next sequential job_number; display as LPAD(...,3,'0')
-            next_no = conn.execute(text("SELECT COALESCE(MAX(job_number),0)+1 AS n FROM jobs FOR UPDATE")).scalar()
-
-            # Insert main job
-            conn.execute(text("""
-                INSERT INTO jobs (job_number, title, client_name, client_email, client_phone, status, start_date)
-                VALUES (:jn, :ti, :cn, :ce, :cp, :st, :sd)
-            """), {
-                "jn": next_no,
-                "ti": title,
-                "cn": client_name,
-                "ce": client_email,
-                "cp": client_phone,
-                "st": status,
-                "sd": d_start
-            })
-            job_id = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
-
-            # Insert the 5 standard steps
-            steps = [
-                ("start",  "Start of Job",                   d_start),
-                ("framing","Framing",                        d_frame),
-                ("pour",   "Concrete Pouring",               d_pour),
-                ("dry",    "Concrete Dry",                   d_dry),
-                ("final",  "Final Inspection & Job Closure", d_final),
-            ]
-            for key, name, dt in steps:
-                conn.execute(text("""
-                    INSERT INTO job_steps (job_id, step_key, step_name, target_date)
-                    VALUES (:jid, :sk, :sn, :td)
-                """), {"jid": job_id, "sk": key, "sn": name, "td": dt})
-
-            row = conn.execute(text("""
-                SELECT id, job_number, LPAD(job_number,3,'0') AS job_code, title, status
-                FROM jobs WHERE id=:id
-            """), {"id": job_id}).mappings().first()
-
-        return jsonify(ok=True, job=dict(row))
-
-    # Update employee status (JSON)
+    # ---------- Employees: Update status (JSON) ----------
     @app.route("/admin-portal/employees/<int:emp_id>/status", methods=["POST"])
     @login_required
     def admin_portal_employee_status(emp_id):
@@ -548,28 +431,125 @@ def create_app(config_override: dict | None = None):
                 return jsonify(ok=False, error="Employee not found."), 404
         return jsonify(ok=True)
 
-    # ---------- Contact API ----------
-    @app.post("/contact")
-    def contact():
-        data = request.form or request.json or {}
-        name = (data.get("name") or "").strip()
-        email = (data.get("email") or "").strip()
-        phone = (data.get("phone") or "").strip()
-        subject = (data.get("subject") or "").strip()
-        message = (data.get("message") or "").strip()
-        if not name or not email or not message:
-            return jsonify({"ok": False, "error": "Name, Email and Message are required."}), 400
+    # -------- Attendance API (Admin only) --------
+    @app.get("/admin-portal/attendance-data")
+    @login_required
+    def attendance_data():
+        _require_admin()
+        try:
+            employee_id = int(request.args.get("employee_id") or 0)
+            year = int(request.args.get("year") or date.today().year)
+            month = int(request.args.get("month") or date.today().month)
+        except ValueError:
+            return jsonify({"ok": False, "error": "Invalid parameters."}), 400
+        if not employee_id:
+            return jsonify({"ok": True, "days": {}, "year": year, "month": month})
+        first_day = date(year, month, 1)
+        last_day = date(year, month, monthrange(year, month)[1])
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                """
+                SELECT work_date, status,
+                       TIME_FORMAT(sign_in, '%H:%i') AS sign_in,
+                       TIME_FORMAT(sign_out, '%H:%i') AS sign_out,
+                       notes
+                FROM employee_status_log
+                WHERE employee_id=:eid AND work_date BETWEEN :d1 AND :d2
+                ORDER BY work_date
+                """
+            ), {"eid": employee_id, "d1": first_day, "d2": last_day}).mappings().all()
+        days = {r["work_date"].isoformat(): {"status": r["status"], "sign_in": r["sign_in"], "sign_out": r["sign_out"], "notes": r["notes"]} for r in rows}
+        return jsonify({"ok": True, "days": days, "year": year, "month": month})
+
+    @app.post("/admin-portal/attendance-save")
+    @login_required
+    def attendance_save():
+        _require_admin()
+        data = request.get_json(silent=True) or {}
+        try:
+            employee_id = int(data.get("employee_id") or 0)
+            work_date = (data.get("date") or "").strip()  # YYYY-MM-DD
+            status = (data.get("status") or "present").lower()
+            if status not in ("present", "absent", "half-day", "leave"):
+                status = "present"
+            sin = (data.get("sign_in_time") or "").strip()  # HH:MM
+            sout = (data.get("sign_out_time") or "").strip()  # HH:MM
+            notes = (data.get("notes") or "").strip() or None
+        except Exception:
+            return jsonify({"ok": False, "error": "Invalid payload."}), 400
+        if not employee_id or not work_date:
+            return jsonify({"ok": False, "error": "employee_id and date are required."}), 400
+
+        sign_in_dt = None
+        sign_out_dt = None
+        try:
+            if sin:
+                datetime.strptime(sin, "%H:%M")
+                sign_in_dt = f"{work_date} {sin}:00"
+            if sout:
+                datetime.strptime(sout, "%H:%M")
+                sign_out_dt = f"{work_date} {sout}:00"
+        except ValueError:
+            return jsonify({"ok": False, "error": "Time must be HH:MM."}), 400
+
         with engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO contact_messages (name, email, phone, subject, message)
-                    VALUES (:n, :e, :p, :s, :m)
-                    """
-                ),
-                {"n": name, "e": email, "p": phone, "s": subject, "m": message},
-            )
+            conn.execute(text(
+                """
+                INSERT INTO employee_status_log (employee_id, work_date, status, sign_in, sign_out, notes)
+                VALUES (:eid, :d, :st, :si, :so, :n)
+                ON DUPLICATE KEY UPDATE
+                  status=VALUES(status), sign_in=VALUES(sign_in), sign_out=VALUES(sign_out), notes=VALUES(notes)
+                """
+            ), {"eid": employee_id, "d": work_date, "st": status, "si": sign_in_dt, "so": sign_out_dt, "n": notes})
         return jsonify({"ok": True})
+
+    # ---------- Portal (consumer) ----------
+    @app.get("/portal")
+    @login_required
+    def portal():
+        return render_template("portal.html", cfg=Config)
+
+    # ---------- Jobs: Create (modal POST target) ----------
+    @app.post("/admin-portal/jobs/create")
+    @login_required
+    def jobs_create():
+        _require_admin()
+        data = request.form or request.get_json() or {}
+        title = (data.get("title") or "").strip()
+        status = (data.get("status") or "planned").strip().lower()
+        client_name  = (data.get("client_name") or "").strip() or None
+        client_email = (data.get("client_email") or "").strip() or None
+        client_phone = (data.get("client_phone") or "").strip() or None
+
+        # Dates (store as DATE)
+        date_start  = _parse_date_any(data.get("date_start"))
+        date_frame  = _parse_date_any(data.get("date_framing"))
+        date_pour   = _parse_date_any(data.get("date_pour"))
+        date_dry    = _parse_date_any(data.get("date_dry"))
+        date_final  = _parse_date_any(data.get("date_final"))
+
+        if not title:
+            return jsonify(ok=False, error="Job title is required."), 400
+        if status not in ("planned", "in-progress", "on-hold", "completed", "cancelled"):
+            status = "planned"
+
+        with engine.begin() as conn:
+            job_number = _next_job_number(conn)
+            conn.execute(text("""
+                INSERT INTO jobs
+                (job_number, title, status, client_name, client_email, client_phone,
+                 date_start, date_framing, date_pour, date_dry, date_final)
+                VALUES
+                (:code, :title, :status, :cname, :cemail, :cphone,
+                 :d0, :d1, :d2, :d3, :d4)
+            """), {
+                "code": job_number,
+                "title": title,
+                "status": status,
+                "cname": client_name, "cemail": client_email, "cphone": client_phone,
+                "d0": date_start, "d1": date_frame, "d2": date_pour, "d3": date_dry, "d4": date_final
+            })
+        return jsonify(ok=True)
 
     # ---------- Custom pages / error handlers ----------
     @app.errorhandler(404)
