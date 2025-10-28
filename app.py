@@ -161,6 +161,50 @@ def create_app(config_override: dict | None = None):
             return redirect(url_for("portal"))
         return render_template("signup.html", cfg=Config, error=None, form={})
 
+    @app.route("/contact", methods=["GET", "POST"])
+    def contact():
+        if request.method == "GET":
+            # Render page normally
+            return render_template("contact.html", cfg=Config)
+
+        # POST: accept FormData or JSON
+        data = request.get_json(silent=True) or request.form
+
+        name = (data.get("name") or data.get("full_name") or "").strip()
+        email = (data.get("email") or "").strip().lower()
+        phone = (data.get("phone") or "").strip()
+        subject = (data.get("subject") or "General Inquiry").strip()
+        message = (data.get("message") or "").strip()
+
+        # Basic validation (your JS expects { ok: false, error: "..." })
+        errors = []
+        if not name:    errors.append("Name is required.")
+        if not email:   errors.append("Email is required.")
+        if not message: errors.append("Message is required.")
+        if errors:
+            return jsonify(ok=False, error=" ".join(errors), errors=errors), 400
+
+        try:
+            # Insert using SQLAlchemy Core + MySQL NOW() for created_at
+            with engine.begin() as conn:
+                res = conn.execute(text("""
+                    INSERT INTO contact_messages (name, email, phone, subject, message, created_at)
+                    VALUES (:n, :e, :p, :s, :m, NOW())
+                """), {
+                    "n": name,
+                    "e": email,
+                    "p": phone or None,
+                    "s": subject or None,
+                    "m": message,
+                })
+                new_id = res.lastrowid
+
+            # Respond in the shape your main.js expects
+            return jsonify(ok=True, id=new_id, message="Thanks! We'll get back to you shortly.")
+        except Exception:
+            # Keep error generic for the UI
+            return jsonify(ok=False, error="Failed to save your message. Please try again."), 500
+
     @app.post("/signup")
     def signup_post():
         f = request.form
