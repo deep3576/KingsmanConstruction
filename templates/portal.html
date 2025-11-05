@@ -2,7 +2,7 @@
 {% block content %}
 <section class="portal-wrap">
   <div class="portal-card">
-    <h1>Welcome{% if current_user.is_authenticated %}, {{ current_user.email }}{% endif %}</h1>
+    <h1>Welcome {% if current_user.is_authenticated %}, {{ current_user.display_name }}{% endif %}.</h1>
     <p class="lead">You’re signed in. This is your private portal. We’ll add controls here next.</p>
 
     <div class="portal-actions">

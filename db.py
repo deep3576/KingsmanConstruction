@@ -18,6 +18,7 @@ def ensure_schema():
     CREATE TABLE IF NOT EXISTS users (
         id INT NOT NULL AUTO_INCREMENT,
         email VARCHAR(200) NOT NULL UNIQUE,
+        full_name VARCHAR(200) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         role ENUM('admin','consumer') NOT NULL DEFAULT 'consumer',
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
