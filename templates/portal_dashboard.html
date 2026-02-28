@@ -1,13 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>My Jobs</h2>
-{% if jobs %}
-  <ul>
-    {% for j in jobs %}
-      <li><a href="{{ url_for('portal.job_detail', job_uid=j.job_uid) }}">{{ j.job_uid }} — {{ j.title }} ({{ j.status }}) — {{ j.percent_complete }}%</a></li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <p>No jobs yet.</p>
-{% endif %}
+<section class="portal-wrap">
+  <div class="portal-card">
+    <h1>Portal Dashboard</h1>
+    <p class="lead">Welcome{% if current_user.is_authenticated %}, {{ current_user.display_name }}{% endif %}.</p>
+
+    <div class="card" style="overflow:auto; margin-top:14px">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Job #</th>
+            <th>Title</th>
+            <th>Client</th>
+            <th>Status</th>
+            <th>Start date</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if jobs %}
+            {% for j in jobs %}
+              <tr>
+                <td><a href="{{ url_for('portal_job_detail', job_id=j.id) }}"><strong>{{ '%03d'|format(j.job_number) }}</strong></a></td>
+                <td>{{ j.title }}</td>
+                <td>{{ j.client_name or '—' }}</td>
+                <td><span class="badge">{{ j.status }}</span></td>
+                <td>{{ j.start_date or '—' }}</td>
+                <td>{{ j.updated_at }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="6">No jobs available yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
 {% endblock %}
