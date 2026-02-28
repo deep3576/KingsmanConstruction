@@ -1,11 +1,74 @@
+from functools import wraps
+
 from flask import jsonify, request
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from config import Config
 from db import engine
 from . import api_bp
 
 API_PREFIX = "/api/kingsman/v1"
+TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7
+_token_serializer = URLSafeTimedSerializer(Config.SECRET_KEY, salt="kingsman-api-auth")
+
+
+def _make_token(user_id: int) -> str:
+    return _token_serializer.dumps({"uid": int(user_id)})
+
+
+def _extract_token() -> str | None:
+    header = request.headers.get("Authorization", "").strip()
+    if header.lower().startswith("bearer "):
+        return header.split(" ", 1)[1].strip()
+    return None
+
+
+def _resolve_user_from_token() -> dict | None:
+    token = _extract_token()
+    if not token:
+        return None
+
+    try:
+        payload = _token_serializer.loads(token, max_age=TOKEN_TTL_SECONDS)
+        user_id = int(payload.get("uid") or 0)
+    except (BadSignature, SignatureExpired, ValueError, TypeError):
+        return None
+
+    if not user_id:
+        return None
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT u.id, u.email, u.role, COALESCE(u.full_name, cp.full_name) AS full_name
+                FROM users u
+                LEFT JOIN consumer_profiles cp ON cp.user_id = u.id
+                WHERE u.id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": user_id},
+        ).mappings().first()
+    return dict(row) if row else None
+
+
+def auth_required(require_admin: bool = False):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            user = _resolve_user_from_token()
+            if not user:
+                return jsonify(ok=False, error="Unauthorized."), 401
+            if require_admin and (user.get("role") or "").lower() != "admin":
+                return jsonify(ok=False, error="Admin access required."), 403
+            return fn(user, *args, **kwargs)
+
+        return wrapped
+
+    return decorator
 
 
 @api_bp.get("/health")
@@ -36,7 +99,8 @@ def services():
 
 
 @api_bp.get("/jobs")
-def list_jobs():
+@auth_required()
+def list_jobs(current_user: dict):
     limit = min(max(request.args.get("limit", default=20, type=int), 1), 100)
     with engine.connect() as conn:
         rows = conn.execute(
@@ -50,11 +114,12 @@ def list_jobs():
             ),
             {"limit": limit},
         ).mappings().all()
-    return jsonify(items=[dict(r) for r in rows])
+    return jsonify(items=[dict(r) for r in rows], user=current_user)
 
 
 @api_bp.get("/jobs/<int:job_id>")
-def get_job(job_id: int):
+@auth_required()
+def get_job(current_user: dict, job_id: int):
     with engine.connect() as conn:
         job = conn.execute(
             text(
@@ -84,7 +149,42 @@ def get_job(job_id: int):
 
     payload = dict(job)
     payload["steps"] = [dict(s) for s in steps]
-    return jsonify(item=payload)
+    return jsonify(item=payload, user=current_user)
+
+
+@api_bp.get("/portal/overview")
+@auth_required()
+def portal_overview(current_user: dict):
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM jobs) AS total_jobs,
+                    (SELECT COUNT(*) FROM jobs WHERE status='completed') AS completed_jobs,
+                    (SELECT COUNT(*) FROM jobs WHERE status IN ('planned', 'in-progress', 'on-hold')) AS active_jobs
+                """
+            )
+        ).mappings().first()
+    return jsonify(ok=True, user=current_user, metrics=dict(row or {}))
+
+
+@api_bp.get("/admin/overview")
+@auth_required(require_admin=True)
+def admin_overview(current_user: dict):
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM contact_messages) AS message_count,
+                  (SELECT COUNT(*) FROM users) AS user_count,
+                  (SELECT COUNT(*) FROM jobs WHERE status IN ('planned','in-progress','on-hold')) AS open_jobs,
+                  (SELECT COUNT(*) FROM employees WHERE status='active') AS active_employees
+                """
+            )
+        ).mappings().first()
+    return jsonify(ok=True, user=current_user, metrics=dict(row or {}))
 
 
 @api_bp.post("/contact")
@@ -201,8 +301,12 @@ def login():
     if not user or not check_password_hash(user["password_hash"], password):
         return jsonify(ok=False, error="Invalid email or password."), 401
 
+    token = _make_token(user["id"])
     return jsonify(
         ok=True,
+        token=token,
+        token_type="Bearer",
+        expires_in=TOKEN_TTL_SECONDS,
         user={
             "id": user["id"],
             "email": user["email"],
@@ -210,6 +314,12 @@ def login():
             "full_name": user["full_name"],
         },
     )
+
+
+@api_bp.get("/auth/me")
+@auth_required()
+def auth_me(current_user: dict):
+    return jsonify(ok=True, user=current_user)
 
 
 @api_bp.route("/<path:_>", methods=["OPTIONS"])

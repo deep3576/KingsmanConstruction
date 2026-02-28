@@ -20,16 +20,37 @@
       <div class="cards" style="grid-template-columns:repeat(3,1fr); gap:14px">
         <article class="card" style="padding:16px">
           <h3 style="margin:0 0 8px">New Messages</h3>
-          <p class="form-msg">(coming soon)</p>
+          <p><strong>{{ dashboard_metrics.message_count if dashboard_metrics else 0 }}</strong></p>
         </article>
         <article class="card" style="padding:16px">
-          <h3 style="margin:0 0 8px">Active Users</h3>
-          <p class="form-msg">(coming soon)</p>
+          <h3 style="margin:0 0 8px">Registered Users</h3>
+          <p><strong>{{ dashboard_metrics.user_count if dashboard_metrics else 0 }}</strong></p>
         </article>
         <article class="card" style="padding:16px">
           <h3 style="margin:0 0 8px">Open Jobs</h3>
-          <p class="form-msg">(coming soon)</p>
+          <p><strong>{{ dashboard_metrics.open_jobs if dashboard_metrics else 0 }}</strong></p>
         </article>
+      </div>
+
+      <div class="card" style="margin-top:14px; overflow:auto">
+        <h3 style="margin:0 0 12px">Recent Jobs</h3>
+        <table class="table">
+          <thead><tr><th>Job #</th><th>Title</th><th>Status</th><th>Updated</th></tr></thead>
+          <tbody>
+            {% if recent_jobs %}
+              {% for j in recent_jobs %}
+                <tr>
+                  <td><strong>{{ '%03d'|format(j.job_number) }}</strong></td>
+                  <td>{{ j.title }}</td>
+                  <td><span class="badge">{{ j.status }}</span></td>
+                  <td>{{ j.updated_at }}</td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="4">No jobs yet.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </div>
 
     {% elif tab == 'employees' %}
@@ -277,7 +298,7 @@
             {% if jobs %}
               {% for j in jobs %}
                 <tr>
-                  <td><strong>{{ j.job_code }}</strong></td>
+                  <td><strong>{{ '%03d'|format(j.job_number) }}</strong></td>
                   <td>{{ j.title }}</td>
                   <td>{{ j.client_name or '—' }}</td>
                   <td><span class="badge">{{ j.status }}</span></td>
