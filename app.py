@@ -285,6 +285,28 @@ def create_app(config_override: dict | None = None):
         employees = None
         employees_metrics = None
         jobs = None
+        dashboard_metrics = None
+        recent_jobs = None
+
+        if tab == "dashboard":
+            with engine.connect() as conn:
+                dashboard_metrics = conn.execute(text(
+                    """
+                    SELECT
+                      (SELECT COUNT(*) FROM contact_messages) AS message_count,
+                      (SELECT COUNT(*) FROM users) AS user_count,
+                      (SELECT COUNT(*) FROM jobs WHERE status IN ('planned','in-progress','on-hold')) AS open_jobs,
+                      (SELECT COUNT(*) FROM employees WHERE status='active') AS active_employees
+                    """
+                )).mappings().first()
+                recent_jobs = conn.execute(text(
+                    """
+                    SELECT job_number, title, status, updated_at
+                    FROM jobs
+                    ORDER BY updated_at DESC
+                    LIMIT 5
+                    """
+                )).mappings().all()
 
         if tab == "employees":
             subtab = (request.args.get("subtab") or "dashboard").lower()
@@ -330,6 +352,8 @@ def create_app(config_override: dict | None = None):
             cfg=Config,
             tab=tab,
             subtab=subtab,
+            dashboard_metrics=dashboard_metrics,
+            recent_jobs=recent_jobs,
             employees=employees,
             employees_metrics=employees_metrics,
             jobs=jobs,
@@ -551,7 +575,42 @@ def create_app(config_override: dict | None = None):
     @app.get("/portal")
     @login_required
     def portal():
-        return render_template("portal.html", cfg=Config)
+        with engine.connect() as conn:
+            jobs = conn.execute(text(
+                """
+                SELECT id, job_number, title, client_name, status, start_date, updated_at
+                FROM jobs
+                ORDER BY updated_at DESC
+                """
+            )).mappings().all()
+        return render_template("portal_dashboard.html", cfg=Config, jobs=jobs)
+
+    @app.get("/portal/jobs/<int:job_id>")
+    @login_required
+    def portal_job_detail(job_id: int):
+        with engine.connect() as conn:
+            job = conn.execute(text(
+                """
+                SELECT id, job_number, title, client_name, client_email, client_phone, status, start_date, created_at, updated_at
+                FROM jobs
+                WHERE id = :job_id
+                LIMIT 1
+                """
+            ), {"job_id": job_id}).mappings().first()
+
+            if not job:
+                abort(404)
+
+            steps = conn.execute(text(
+                """
+                SELECT step_key, step_name, target_date, completed, updated_at
+                FROM job_steps
+                WHERE job_id = :job_id
+                ORDER BY FIELD(step_key, 'start', 'framing', 'pour', 'dry', 'final')
+                """
+            ), {"job_id": job_id}).mappings().all()
+
+        return render_template("portal_job_detail.html", cfg=Config, job=job, steps=steps)
 
     # ---------- Jobs: Create (modal POST target) ----------
     @app.post("/admin-portal/jobs/create")
@@ -579,20 +638,34 @@ def create_app(config_override: dict | None = None):
 
         with engine.begin() as conn:
             job_number = _next_job_number(conn)
-            conn.execute(text("""
+            ins = conn.execute(text("""
                 INSERT INTO jobs
-                (job_number, title, status, client_name, client_email, client_phone,
-                 date_start, date_framing, date_pour, date_dry, date_final)
+                (job_number, title, status, client_name, client_email, client_phone, start_date)
                 VALUES
-                (:code, :title, :status, :cname, :cemail, :cphone,
-                 :d0, :d1, :d2, :d3, :d4)
+                (:code, :title, :status, :cname, :cemail, :cphone, :d0)
             """), {
                 "code": job_number,
                 "title": title,
                 "status": status,
                 "cname": client_name, "cemail": client_email, "cphone": client_phone,
-                "d0": date_start, "d1": date_frame, "d2": date_pour, "d3": date_dry, "d4": date_final
+                "d0": date_start,
             })
+
+            job_id = ins.lastrowid
+            job_steps = [
+                ("start", "Start of Job", date_start),
+                ("framing", "Framing", date_frame),
+                ("pour", "Concrete Pouring", date_pour),
+                ("dry", "Concrete Dry", date_dry),
+                ("final", "Final Inspection & Closure", date_final),
+            ]
+            for key, name, target in job_steps:
+                conn.execute(text(
+                    """
+                    INSERT INTO job_steps (job_id, step_key, step_name, target_date)
+                    VALUES (:jid, :k, :n, :t)
+                    """
+                ), {"jid": job_id, "k": key, "n": name, "t": target})
         return jsonify(ok=True)
 
     # ---------- Custom pages / error handlers ----------

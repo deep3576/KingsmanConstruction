@@ -1,24 +1,52 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Job {{ job.job_uid }} — {{ job.title }}</h2>
-<p>Status: <strong>{{ job.status }}</strong> · {{ job.percent_complete }}%</p>
-<p>{{ job.description }}</p>
+<section class="portal-wrap">
+  <div class="portal-card">
+    <h1>Job {{ '%03d'|format(job.job_number) }} — {{ job.title }}</h1>
+    <p class="lead">Status: <strong>{{ job.status }}</strong></p>
 
-<h3>Upload a file (contractors/admin)</h3>
-<form method="post" enctype="multipart/form-data">
-  {{ form.hidden_tag() }}
-  <p><label>Category<br>{{ form.category() }}</label></p>
-  <p><label>Note<br>{{ form.note(rows=3) }}</label></p>
-  <p>{{ form.file() }}</p>
-  <p>{{ form.submit(class_="btn") }}</p>
-</form>
+    <div class="cards" style="grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 14px;">
+      <article class="card" style="padding: 12px;">
+        <h3 style="margin:0 0 8px;">Client</h3>
+        <p style="margin:0;">{{ job.client_name or '—' }}</p>
+        <p style="margin:0;">{{ job.client_email or '—' }}</p>
+        <p style="margin:0;">{{ job.client_phone or '—' }}</p>
+      </article>
+      <article class="card" style="padding: 12px;">
+        <h3 style="margin:0 0 8px;">Dates</h3>
+        <p style="margin:0;">Start date: {{ job.start_date or '—' }}</p>
+        <p style="margin:0;">Created: {{ job.created_at }}</p>
+        <p style="margin:0;">Updated: {{ job.updated_at }}</p>
+      </article>
+    </div>
 
-<h3>Attachments</h3>
-<ul>
-  {% for a in attachments %}
-    <li>{{ a.category }} — {{ a.file_name }} ({{ a.size_bytes }} bytes)</li>
-  {% else %}
-    <li>No files yet.</li>
-  {% endfor %}
-</ul>
+    <div class="card" style="overflow:auto;">
+      <h3 style="margin:0 0 10px;">Job Steps</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Step</th>
+            <th>Target date</th>
+            <th>Status</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if steps %}
+            {% for s in steps %}
+              <tr>
+                <td>{{ s.step_name }}</td>
+                <td>{{ s.target_date or '—' }}</td>
+                <td>{{ 'Completed' if s.completed else 'Pending' }}</td>
+                <td>{{ s.updated_at }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="4">No steps were added for this job yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
 {% endblock %}
