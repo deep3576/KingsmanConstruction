@@ -1,224 +1,213 @@
-# KingsmanRenovations.ca — Flask Single Page (PythonAnywhere)
+# KingsmanConstruction
 
-**Company:** Kingsman Construction & Renovations Inc.  
-**Domain:** kingsmanrenovations.ca  
-**DB:** PythonAnywhere MySQL `deep3576$ProductionDB`
+Kingsman Renovations Construction Inc.
 
-## 1) Single source of truth: `instance/config.ini`
+## New architecture (frontend + backend split)
 
-Create from sample and edit secrets/DB:
+This repository now supports a **REST API backend** and a **GitHub Pages-friendly frontend** in separate folders:
 
+- `backend/` → Flask backend exposing API endpoints to be merged/run alongside your Music app backend.
+- `frontend/` → static site for GitHub Pages.
+  - `frontend/index.html`
+  - `frontend/login.html`
+  - `frontend/signup.html`
+  - `frontend/static/css/styles.css`
+  - `frontend/static/js/main.js`
+  - `frontend/static/js/auth.js`
+  - `frontend/static/img/*.svg` (all frontend images/icons are text-based SVG assets)
+
+---
+
+## API prefix
+
+Construction endpoints are namespaced under:
+
+`/api/kingsman/v1`
+
+Examples:
+
+- `GET /api/kingsman/v1/health`
+- `GET /api/kingsman/v1/services`
+- `GET /api/kingsman/v1/jobs`
+- `GET /api/kingsman/v1/jobs/<id>`
+- `POST /api/kingsman/v1/contact`
+- `POST /api/kingsman/v1/auth/login`
+- `POST /api/kingsman/v1/auth/signup`
+
+---
+
+## Pattern A (Recommended for you): Merge Kingsman + Music School in ONE Flask app
+
+You said you will use **Pattern A** and both apps use the **same DB host**. This section is the full merge playbook.
+
+### Goal
+
+Run one Flask server that serves both:
+
+- Music School API (example prefix: `/api/music/v1`)
+- Kingsman API (prefix: `/api/kingsman/v1`)
+
+This avoids route interference by using different URL prefixes.
+
+---
+
+## 1) Copy Kingsman backend module into your Music app repo
+
+Copy these folders/files from this repo into your Music School repo:
+
+- `backend/`
+  - `backend/__init__.py`
+  - `backend/api/__init__.py`
+  - `backend/api/routes.py`
+
+If your Music app already has `config.py` and `db.py`, keep one source of truth there and adapt imports if needed.
+
+---
+
+## 2) Register Kingsman blueprint inside Music app factory
+
+In your Music School app factory (example `create_app()`), register Kingsman API blueprint.
+
+```python
+from flask import Flask
+
+# existing music imports...
+# from music.api import music_bp
+
+# kingsman import (after copying backend package)
+from backend.api import api_bp as kingsman_api_bp
+
+
+def create_app(config_object=None):
+    app = Flask(__name__)
+
+    # existing config setup...
+    # app.config.from_object(config_object)
+
+    # existing music routes/blueprints...
+    # app.register_blueprint(music_bp, url_prefix="/api/music/v1")
+
+    # register kingsman blueprint (already includes /api/kingsman/v1 prefix)
+    app.register_blueprint(kingsman_api_bp)
+
+    return app
 ```
-cp instance/config_example.ini instance/config.ini
+
+> Important: do **not** re-prefix Kingsman blueprint during registration, because it already has `url_prefix="/api/kingsman/v1"`.
+
+---
+
+## 3) Keep one SQLAlchemy engine for the shared DB host
+
+Because both apps use the same DB host, use one DB config in your host app and ensure Kingsman routes use the same engine.
+
+Current Kingsman code imports `engine` from `db.py`. So in merged app, make sure:
+
+- the active `db.py` points to your intended shared DB connection string,
+- both Music and Kingsman code import that same engine.
+
+If your Music app uses a different DB module name, update Kingsman imports in:
+
+- `backend/api/routes.py`
+- `backend/__init__.py` (for `ensure_schema`)
+
+to reference your host app DB module.
+
+---
+
+## 4) Schema strategy (same DB host)
+
+Kingsman app factory calls `ensure_schema()` to create required tables.
+
+In merged Pattern A setup, pick one approach:
+
+### Option A (simple):
+Call `ensure_schema()` at app startup once (works for dev/small deploys).
+
+### Option B (preferred in production):
+Run schema/migrations in deployment pipeline and remove startup schema creation from request app startup.
+
+---
+
+## 5) CORS strategy when merged
+
+If Music app already has global CORS handling, avoid duplicate/conflicting headers.
+
+Kingsman currently adds permissive CORS via `after_request`. In merged app:
+
+- either keep one centralized CORS layer for the whole app,
+- or ensure duplicate headers are not overwritten incorrectly.
+
+---
+
+## 6) Final route map check (must pass)
+
+After merging, verify both groups are live:
+
+- Music API: `/api/music/v1/...`
+- Kingsman API: `/api/kingsman/v1/...`
+
+Quick checks:
+
+- `GET /api/kingsman/v1/health`
+- one known Music endpoint (example `/api/music/v1/health`)
+
+---
+
+## 7) Frontend integration (GitHub Pages)
+
+For Kingsman frontend (`frontend/*.html`), set API base to merged host:
+
+```html
+<script>
+  window.CONSTRUCTION_API_BASE = "https://YOUR_DOMAIN/api/kingsman/v1";
+</script>
 ```
 
-### Example `instance/config.ini`
-```ini
-[app]
-env = production
-secret_key = change_this_to_a_very_random_long_value
-company_name = Kingsman Construction & Renovations Inc.
-company_domain = kingsmanrenovations.ca
-primary_color = #0f172a
-accent_color = #dc2626
+Place this before loading:
 
-[database]
-engine = mysql
-driver = pymysql
-user = deep3576
-password = YOUR_DB_PASSWORD
-host = deep3576.mysql.pythonanywhere-services.com
-name = deep3576$ProductionDB
-charset = utf8mb4
-```
+- `frontend/static/js/main.js`
+- `frontend/static/js/auth.js`
 
-> For local-only dev, switch to SQLite:
-> ```ini
-> [database]
-> engine = sqlite
-> path = instance/app.db
-> ```
+---
 
-## 2) Local run
+## 8) Example production topology for Pattern A
+
+- One Flask app process (Music + Kingsman blueprints)
+- One reverse proxy (Nginx/Caddy)
+- One DB host (shared)
+- Distinct API prefixes:
+  - `/api/music/v1`
+  - `/api/kingsman/v1`
+
+This is exactly how to avoid interference while sharing infrastructure.
+
+---
+
+## Run backend (standalone Kingsman, optional)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python create_db.py
-flask --app app run --debug
+python backend/run.py
 ```
 
-## 3) Deploy on PythonAnywhere
+Backend default URL: `http://localhost:8000`
 
-- Upload project to `/home/deep3576/KingsmanRenovations/`.
-- Place your **instance/config.ini** at `/home/deep3576/KingsmanRenovations/instance/config.ini`.
-- On the **Web** tab: set source to the folder and WSGI to `wsgi.py`.
-- Point the virtualenv and `pip install -r requirements.txt`.
-- **Reload** the app.
-- Open a Bash console and run:
-```bash
-python create_db.py
-```
+---
 
-## 4) Troubleshooting
+## Run frontend locally
 
-- **Missing DB URI:** Ensure `instance/config.ini` exists and `[database]` is correctly filled. The app will fall back to SQLite only if you explicitly set `engine = sqlite`.
-- **Inspect config at runtime:** temporarily call `Config.debug_print()` inside `create_app()` while debugging.
-
-## 5) Notes
-- The contact form stores messages in `contact_messages`.
-- Images in `static/img/` are placeholders—swap with real photos.
-- Brand text/colors come from `config.ini` → `Config` → templates.
-```
-
-cp instance/config_example.ini instance/config.ini
-```
-
-Edit values:
-
-```ini
-[app]
-env = production
-secret_key = change_this_to_a_very_random_long_value
-company_name = Kingsman Construction & Renovations Inc.
-company_domain = kingsmanrenovations.ca
-
-[database]
-engine = mysql
-driver = pymysql
-user = deep3576
-password = YOUR_DB_PASSWORD
-host = deep3576.mysql.pythonanywhere-services.com
-name = deep3576$ProductionDB
-charset = utf8mb4
-```
-
-> Local dev? Use SQLite by switching the database section to:
->
-> ```ini
-> [database]
-> engine = sqlite
-> path = instance/app.db
-> ```
-
-## 2) Local setup
+From repo root:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python create_db.py
-flask --app app run --debug
+python -m http.server 5500
 ```
 
-## 3) PythonAnywhere deployment
+Then open `http://localhost:5500/frontend/`
 
-- Upload to `/home/deep3576/KingsmanRenovations/`.
-- Place your `config.ini` at `/home/deep3576/KingsmanRenovations/instance/config.ini`.
-- (Optional) You can set env vars instead of INI, but INI is recommended.
-- In **Virtualenv**, point to your venv and `pip install -r requirements.txt`.
-- Click **Reload**; then open a Bash console and run:
+If backend is not on localhost:8000, set this before loading frontend pages:
 
-```bash
-python create_db.py
+```html
+<script>
+  window.CONSTRUCTION_API_BASE = "https://your-backend-host/api/kingsman/v1";
+</script>
 ```
-
-## 4) Troubleshooting
-
-- Error: `Either 'SQLALCHEMY_DATABASE_URI' or 'SQLALCHEMY_BINDS' must be set` → The app didn’t find a DB URI. Ensure `instance/config.ini` exists **or** environment variables are set.
-- To verify what URI is used, temporarily call `Config.debug_print()` inside `create_app()` during a test run.
-
-## 5) Alternatives
-
-- `.env` still works if you prefer environment variables.
-- A full URI via `SQLALCHEMY_DATABASE_URI` overrides everything.
-```
-bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with DB password (and optionally other DB pieces)
-python create_db.py
-flask --app app run --debug
-```
-
-> If you see `RuntimeError: Either 'SQLALCHEMY_DATABASE_URI' or 'SQLALCHEMY_BINDS' must be set`, it means the app couldn't find a DB URI. Fix by:
-> 1) Ensure `.env` exists and includes `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME` **or** a full `SQLALCHEMY_DATABASE_URI`.
-> 2) On PythonAnywhere, set these as **Environment variables** on the Web tab, then **Reload**.
-> 3) You can also run locally with the built‑in SQLite fallback if no MySQL vars are present.
-
-Visit http://127.0.0.1:5000
-
-## 2) PythonAnywhere deployment
-
-1. Upload the whole `KingsmanRenovations/` folder to `/home/deep3576/`.
-2. On the **Web** tab, create a new Flask app (Manual config). Set **Source code** to `/home/deep3576/KingsmanRenovations` and **WSGI file** to `/home/deep3576/KingsmanRenovations/wsgi.py`.
-3. In the **Virtualenv** section, point to `/home/deep3576/KingsmanRenovations/.venv` (create and `pip install -r requirements.txt`).
-4. In the **Environment variables** section, set:
-   - `SECRET_KEY`
-   - `DB_USER=deep3576`
-   - `DB_PASSWORD=YOUR_DB_PASSWORD`
-   - `DB_HOST=deep3576.mysql.pythonanywhere-services.com`
-   - `DB_NAME=deep3576$ProductionDB`
-   *(Alternatively, set a single `SQLALCHEMY_DATABASE_URI` string.)*
-5. **Reload** the web app. Run `python create_db.py` once on the **Consoles** tab → Bash to create tables.
-
-## 3) Custom domain (kingsmanrenovations.ca)
-
-1. In PythonAnywhere **Web → Add a custom domain**, enter `kingsmanrenovations.ca` (and optionally `www.kingsmanrenovations.ca`).
-2. In your domain DNS (at your registrar), add the required **A**/**CNAME** records that PA shows.
-3. Back on PA, enable **HTTPS** (Let’s Encrypt) and request a certificate.
-
-## 4) Database connection string examples
-
-- **Built from parts (recommended):** handled automatically by `config.py` when the four `DB_*` vars are present.
-- **Explicit full URI:**
-
-```
-mysql+pymysql://deep3576:YOUR_DB_PASSWORD@deep3576.mysql.pythonanywhere-services.com/deep3576$ProductionDB?charset=utf8mb4
-```
-
-## 5) Notes
-- The contact form writes to `contact_messages` table. Retrieve via a simple admin route later or directly from MySQL.
-- Images in `static/img/` are placeholders — replace with real photos.
-- Colors and copy are controlled via `config.py` and templates.
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with DB password
-python create_db.py
-flask --app app run --debug
-```
-
-Visit http://127.0.0.1:5000
-
-## 2) PythonAnywhere deployment
-
-1. Upload the whole `KingsmanRenovations/` folder to `/home/deep3576/`.
-2. On the **Web** tab, create a new Flask app (Manual config). Set **Source code** to `/home/deep3576/KingsmanRenovations` and **WSGI file** to `/home/deep3576/KingsmanRenovations/wsgi.py`.
-3. In the **Virtualenv** section, point to `/home/deep3576/KingsmanRenovations/.venv` (create and `pip install -r requirements.txt`).
-4. In the **Environment variables** section, set these to match `.env`:
-   - `SECRET_KEY`
-   - `SQLALCHEMY_DATABASE_URI`
-5. **Reload** the web app. Run `python create_db.py` once on the **Consoles** tab → Bash to create tables.
-
-## 3) Custom domain (kingsmanrenovations.ca)
-
-1. In PythonAnywhere **Web → Add a custom domain**, enter `kingsmanrenovations.ca` (and optionally `www.kingsmanrenovations.ca`).
-2. In your domain DNS (at your registrar), add the required **A**/**CNAME** records that PA shows.
-3. Back on PA, enable **HTTPS** (Let’s Encrypt) and request a certificate.
-
-## 4) Database connection string
-
-```
-mysql+pymysql://deep3576:YOUR_DB_PASSWORD@deep3576.mysql.pythonanywhere-services.com/deep3576$ProductionDB?charset=utf8mb4
-```
-
-## 5) Notes
-- The contact form writes to `contact_messages` table. Retrieve via a simple admin route later or directly from MySQL.
-- Images in `static/img/` are placeholders — replace with real photos.
-- Colors and copy are controlled via `config.py` and templates.

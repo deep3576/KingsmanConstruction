@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="Before and after placeholder">
-  <rect width="1200" height="675" fill="#e2e8f0"/>
-  <rect x="80" y="90" width="480" height="500" fill="#94a3b8"/>
-  <rect x="640" y="90" width="480" height="500" fill="#334155"/>
-  <text x="230" y="360" font-size="64" font-family="Inter, Arial, sans-serif" font-weight="700" fill="#ffffff">BEFORE</text>
-  <text x="800" y="360" font-size="64" font-family="Inter, Arial, sans-serif" font-weight="700" fill="#ffffff">AFTER</text>
-</svg>
